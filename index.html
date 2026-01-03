@@ -3,25 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 習慣追蹤器 | Habit Tracker</title>
+    <title>AI 雲端習慣追蹤器 | Habit Tracker</title>
     
-    <!-- 1. 載入核心庫 -->
+    <!-- 1. 核心庫載入 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Firebase SDK -->
+    <!-- 2. Firebase SDK 模組 (解決之前 Import 報錯的問題) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
+        // 將 SDK 掛載到全域以便 Babel 腳本使用
         window.FirebaseSDK = { 
             initializeApp, getAuth, signInAnonymously, onAuthStateChanged, 
-            signInWithCustomToken, getFirestore, doc, setDoc, getDoc, 
-            collection, onSnapshot, addDoc, updateDoc, deleteDoc, query 
+            getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query 
         };
+        // 觸發載入完成事件
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
 
@@ -41,7 +42,7 @@
         const { useState, useEffect, useRef } = React;
 
         // ========================================================
-        // 【重要：GitHub 同步設定區】
+        // 【設定區】您的專屬金鑰與連線資訊
         // ========================================================
         const myCustomFirebaseConfig = {
             apiKey: "AIzaSyAZZGBhfoPg8jfO78D0Z6irPRLgNBW_yPE",
@@ -53,424 +54,309 @@
         };
 
         const geminiApiKey = "AIzaSyCm3_30XFuMUBlfvTCnWKPaWrUGoxpW1gc";
-        
-        const getFinalConfig = () => {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) return JSON.parse(__firebase_config);
-            return myCustomFirebaseConfig;
-        };
-        const firebaseConfig = getFinalConfig();
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'github-habit-tracker';
+        const appId = 'habit-tracker-sync';
 
-        // --- 語言包設定 ---
+        // --- 語言包 ---
         const translations = {
             zh: {
-                title: "習慣追蹤",
-                statusLocal: "本機模式 (不支援同步)",
+                title: "雲端習慣",
+                statusLocal: "本機模式",
                 statusCloud: "雲端同步中",
+                statusSyncing: "連線中...",
                 switchUser: "切換使用者：",
                 recentUsers: "最近使用的使用者",
-                addNewUser: "新增 / 手動輸入",
                 inputNewName: "輸入新名稱...",
                 confirm: "確認",
                 switch: "切換",
                 todayProgress: "今日進度",
                 addPlaceholder: "新增今天的挑戰...",
-                aiButtonShow: "獲取 AI 習慣推薦",
-                aiButtonHide: "隱藏 AI 推薦",
+                aiButtonShow: "獲取 AI 建議",
+                aiButtonHide: "隱藏 AI 建議",
                 aiGoalPlaceholder: "如：我想更有活力...",
                 aiGenerate: "生成",
                 streak: "天連續",
-                noHabits: "目前還沒有習慣，新增一個吧！",
-                syncing: "正在讀取資料...",
+                noHabits: "還沒有習慣，新增一個吧！",
                 deleteConfirm: "確定刪除？",
-                aiSystemPrompt: "你是一位行為心理學家。根據使用者的目標推薦3個繁體中文的微習慣，包含 name (10字內) 和 reason (15字內)。格式：JSON 陣列。",
+                aiSystemPrompt: "你是一位行為心理學家。根據目標推薦3個繁體中文微習慣。格式：JSON 陣列。",
                 months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
                 days: ['日','一','二','三','四','五','六'],
-                langLabel: "語言選擇",
                 dateLocale: "zh-TW",
-                quotes: [
-                    "成功不是將來才有的，而是從決定去做的那一刻起，持續累積而成。",
-                    "不積跬步，無以至千里；不積小流，無以成江海。",
-                    "所謂的運氣，不過是機會碰巧遇到了你的努力。",
-                    "習慣是一條巨纜，我們每天編結一根股線，到最後它會變得無法弄斷。",
-                    "種一棵樹最好的時間是十年前，其次是現在。",
-                    "重要的不是你現在在哪裡，而是你正朝向哪個方向前進。",
-                    "卓越不是一種行為，而是一種習慣。",
-                    "每天進步1%，一年後你會強大37倍。",
-                    "所有的偉大，都源於一個勇敢的開始。",
-                    "你是自己習慣的產物，所以請選擇好的習慣。"
-                ]
+                quotes: ["成功源於每天的累積。","卓越不是行為，而是習慣。","每天進步1%，一年後強大37倍。","你是自己習慣的產物。"]
             },
             vi: {
                 title: "Thói Quen",
-                statusLocal: "Chế độ nội bộ (Không đồng bộ)",
-                statusCloud: "Đang đồng bộ Cloud",
+                statusLocal: "Chế độ nội bộ",
+                statusCloud: "Đang đồng bộ",
+                statusSyncing: "Đang kết nối...",
                 switchUser: "Người dùng: ",
-                recentUsers: "Người dùng gần đây",
-                addNewUser: "Thêm / Nhập thủ công",
+                recentUsers: "Gần đây",
                 inputNewName: "Nhập tên mới...",
                 confirm: "Xác nhận",
                 switch: "Đổi",
                 todayProgress: "Tiến độ hôm nay",
-                addPlaceholder: "Thêm thử thách mới...",
-                aiButtonShow: "Nhận gợi ý từ AI",
-                aiButtonHide: "Ẩn gợi ý AI",
-                aiGoalPlaceholder: "VD: Tôi muốn năng động hơn...",
+                addPlaceholder: "Thêm thử thách...",
+                aiButtonShow: "Gợi ý AI",
+                aiButtonHide: "Ẩn AI",
+                aiGoalPlaceholder: "VD: Tôi muốn khỏe hơn...",
                 aiGenerate: "Tạo",
                 streak: "ngày liên tiếp",
-                noHabits: "Chưa có thói quen nào, hãy thêm mới!",
-                syncing: "Đang tải dữ liệu...",
-                deleteConfirm: "Bạn có chắc muốn xóa?",
-                aiSystemPrompt: "Bạn là một chuyên gia tâm lý hành vi. Dựa trên mục tiêu của người dùng, hãy đề xuất 3 thói quen nhỏ bằng tiếng Việt, bao gồm name (tối đa 10 chữ) và reason (tối đa 15 chữ). Định dạng: mảng JSON.",
+                noHabits: "Chưa có thói quen!",
+                deleteConfirm: "Xóa thói quen này?",
+                aiSystemPrompt: "Gợi ý 3 thói quen nhỏ bằng tiếng Việt. JSON array.",
                 months: ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"],
                 days: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
-                langLabel: "Ngôn ngữ",
                 dateLocale: "vi-VN",
-                quotes: [
-                    "Thành công không phải là đích đến, mà là cả một hành trình nỗ lực không ngừng.",
-                    "Hành trình vạn dặm bắt đầu từ một bước chân nhỏ bé.",
-                    "May mắn thực chất là khi sự chuẩn bị gặp gỡ cơ hội.",
-                    "Thói quen giống như một sợi cáp, mỗi ngày chúng ta dệt thêm một sợi.",
-                    "Thời điểm tốt nhất để trồng cây là 20 năm trước, thời điểm tốt thứ hai là ngay bây giờ.",
-                    "Sự xuất sắc không phải là một hành động, mà là một thói quen.",
-                    "Mọi điều vĩ đại đều bắt đầu từ một khởi đầu dũng cảm.",
-                    "Bạn chính là kết quả của những thói quen mà bạn nuôi dưỡng."
-                ]
+                quotes: ["Thành công là hành trình nỗ lực.","Sự xuất sắc là một thói quen.","Tiến bộ mỗi ngày 1%.","Bạn là kết quả của thói quen."]
             },
             en: {
                 title: "Habit Tracker",
-                statusLocal: "Local Mode (No Sync)",
+                statusLocal: "Local Mode",
                 statusCloud: "Cloud Synced",
+                statusSyncing: "Connecting...",
                 switchUser: "User: ",
                 recentUsers: "Recent Users",
-                addNewUser: "Add / Manual Input",
-                inputNewName: "Enter new name...",
+                inputNewName: "Enter name...",
                 confirm: "Confirm",
                 switch: "Switch",
                 todayProgress: "Today's Progress",
-                addPlaceholder: "Add a new challenge...",
-                aiButtonShow: "Get AI Suggestions",
-                aiButtonHide: "Hide AI Suggestions",
-                aiGoalPlaceholder: "e.g., I want to be active...",
+                addPlaceholder: "Add a habit...",
+                aiButtonShow: "AI Suggestions",
+                aiButtonHide: "Hide AI",
+                aiGoalPlaceholder: "e.g., be active...",
                 aiGenerate: "Generate",
                 streak: "day streak",
-                noHabits: "No habits yet, add one to start!",
-                syncing: "Syncing data...",
-                deleteConfirm: "Are you sure you want to delete?",
-                aiSystemPrompt: "You are a behavioral psychologist. Based on the user's goal, suggest 3 micro-habits in English, including name (max 10 words) and reason (max 15 words). Format: JSON array.",
-                months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+                noHabits: "No habits yet!",
+                deleteConfirm: "Are you sure?",
+                aiSystemPrompt: "Suggest 3 micro-habits in English. JSON array.",
+                months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
                 days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
                 langLabel: "Language",
                 dateLocale: "en-US",
-                quotes: [
-                    "Success is not final, failure is not fatal.",
-                    "A journey of a thousand miles begins with a single step.",
-                    "Luck is what happens when preparation meets opportunity.",
-                    "First we form habits, then they form us.",
-                    "Excellence is not an act, but a habit.",
-                    "All greatness starts with a brave beginning.",
-                    "You are the product of your habits, so choose them wisely."
-                ]
+                quotes: ["Success is daily repetition.","Excellence is a habit.","1% better every day.","You are your habits."]
             }
         };
+
+        // --- 圖示組件 ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+        );
+        const Plus = (p) => <Icon {...p} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />;
+        const Check = (p) => <Icon {...p} path={<polyline points="20 6 9 17 4 12"/>} />;
+        const Trash = (p) => <Icon {...p} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></>} />;
+        const Sparkles = (p) => <Icon {...p} path={<><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></>} />;
+        const CalendarIcon = (p) => <Icon {...p} path={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} />;
 
         // --- 子組件：日曆 ---
         const MiniCalendar = ({ completedDates, colorClass, lang }) => {
             const t = translations[lang];
-            const [currentDate, setCurrentDate] = useState(new Date());
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const firstDayOfMonth = new Date(year, month, 1).getDay();
-
+            const [viewDate, setViewDate] = useState(new Date());
+            const y = viewDate.getFullYear(), m = viewDate.getMonth();
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const firstDay = new Date(y, m, 1).getDay();
             const renderDays = () => {
-                const days = [];
-                for (let i = 0; i < firstDayOfMonth; i++) days.push(<div key={`e-${i}`} className="h-8 w-8"></div>);
-                for (let day = 1; day <= daysInMonth; day++) {
-                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const isCompleted = completedDates?.includes(dateStr);
-                    const isToday = dateStr === new Date().toISOString().split('T')[0];
-                    days.push(
-                        <div key={day} className="flex items-center justify-center h-8 w-8 relative text-[10px]">
-                            <span className={`z-10 ${isCompleted ? 'text-white font-bold' : isToday ? 'text-indigo-600 font-bold' : 'text-slate-600'}`}>{day}</span>
-                            {isCompleted && <div className={`absolute inset-0 m-1 rounded-full ${colorClass}`}></div>}
-                            {!isCompleted && isToday && <div className="absolute inset-0 m-1 rounded-full border-2 border-indigo-200"></div>}
-                        </div>
-                    );
+                const ds = [];
+                for (let i = 0; i < firstDay; i++) ds.push(<div key={`e-${i}`} className="h-7 w-7"></div>);
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const isDone = completedDates?.includes(dStr);
+                    ds.push(<div key={d} className="flex items-center justify-center h-7 w-7 relative text-[10px]"><span className={`z-10 ${isDone ? 'text-white font-bold' : 'text-slate-600'}`}>{d}</span>{isDone && <div className={`absolute inset-0 m-0.5 rounded-full ${colorClass}`}></div>}</div>);
                 }
-                return days;
+                return ds;
             };
-
             return (
                 <div className="bg-slate-50 rounded-xl p-3 mt-4 border border-slate-100">
-                    <div className="flex justify-between items-center mb-3 text-sm font-bold text-slate-700">
-                        <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))}><ChevronLeft className="w-4 h-4" /></button>
-                        <span>{t.months[month]}</span>
-                        <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))}><ChevronRight className="w-4 h-4" /></button>
+                    <div className="flex justify-between items-center mb-2 text-xs font-bold text-slate-700">
+                        <button onClick={() => setViewDate(new Date(y, m - 1, 1))}>&lt;</button>
+                        <span>{t.months[m]} {y}</span>
+                        <button onClick={() => setViewDate(new Date(y, m + 1, 1))}>&gt;</button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 text-center">
-                        {t.days.map(d => <div key={d} className="text-[10px] text-slate-400 h-5 font-bold">{d}</div>)}
+                        {t.days.map(d => <div key={d} className="text-[10px] text-slate-400 font-bold">{d}</div>)}
                         {renderDays()}
                     </div>
                 </div>
             );
         };
 
-        const Icon = ({ path, className, fill = "none" }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                {path}
-            </svg>
-        );
-        const Plus = (props) => <Icon {...props} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />;
-        const Trash2 = (props) => <Icon {...props} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>} />;
-        const Check = (props) => <Icon {...props} path={<polyline points="20 6 9 17 4 12"/>} />;
-        const Flame = (props) => <Icon {...props} fill={props.fill || "none"} path={<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.88-2.15 1.7-2.9.3 2.1 1.3 3.7 1.3 5.7z"/>} />;
-        const Trophy = (props) => <Icon {...props} path={<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2h-4c0 1.25-.9 2.1-2 2.1s-2-.85-2-2.1H6c-2.3 0-4 1.7-4 4 0 4.1 3 7.3 7 7.9V14c0 1.5 1 2.5 3 2.5s3-1 3-2.5v-.1c4-.6 7-3.8 7-7.9 0-2.3-1.7-4-4-4z"/></>} />;
-        const CalendarIcon = (props) => <Icon {...props} path={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} />;
-        const ChevronLeft = (props) => <Icon {...props} path={<path d="m15 18-6-6 6-6"/>} />;
-        const ChevronRight = (props) => <Icon {...props} path={<path d="m9 18 6-6-6-6"/>} />;
-        const ChevronDown = (props) => <Icon {...props} path={<path d="m6 9 6 6 6-6"/>} />;
-        const Sparkles = (props) => <Icon {...props} path={<><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></>} />;
-        const UserCircle = (props) => <Icon {...props} path={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>} />;
-        const Loader2 = (props) => <Icon {...props} className={`${props.className} animate-spin`} path={<path d="M21 12a9 9 0 1 1-6.219-8.56" />} />;
-        const CalendarDays = (props) => <Icon {...props} path={<><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></>} />;
-        const QuoteIcon = (props) => <Icon {...props} path={<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2H4c-1.25 0-2 .75-2 2v7c0 1.25.75 2 2 2h4c0 2.5-1 4.5-4 5.5l1 1.5ZM13 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2h-4c-1.25 0-2 .75-2 2v7c0 1.25.75 2 2 2h4c0 2.5-1 4.5-4 5.5l1 1.5Z"/>} />;
-
         const App = () => {
             const [lang, setLang] = useState(localStorage.getItem('habit-lang') || 'zh');
             const t = translations[lang];
             const [activeName, setActiveName] = useState(localStorage.getItem('habit-user-name') || 'Guest');
-            const [userList, setUserList] = useState(() => {
-                const saved = localStorage.getItem('habit-user-list');
-                return saved ? JSON.parse(saved) : ['Guest'];
-            });
+            const [userList, setUserList] = useState(() => JSON.parse(localStorage.getItem('habit-user-list') || '["Guest"]'));
             const [habits, setHabits] = useState([]);
-            const [newHabitName, setNewHabitName] = useState('');
-            const [expandedHabitId, setExpandedHabitId] = useState(null);
             const [loading, setLoading] = useState(true);
+            const [connStatus, setConnStatus] = useState('syncing');
+            const [authenticated, setAuthenticated] = useState(false);
             const [showUserPanel, setShowUserPanel] = useState(false);
             const [tempName, setTempName] = useState('');
-            const [authenticated, setAuthenticated] = useState(false);
             const [showAI, setShowAI] = useState(false);
             const [aiGoal, setAiGoal] = useState('');
             const [aiSuggestions, setAiSuggestions] = useState([]);
-            const [loadingAI, setLoadingAI] = useState(false);
+            const [expandedId, setExpandedId] = useState(null);
 
             const dbRef = useRef(null);
             const today = new Date().toISOString().split('T')[0];
 
             useEffect(() => {
-                const setupFirebase = async () => {
-                    if (!firebaseConfig || !window.FirebaseSDK) {
-                        const saved = localStorage.getItem(`local-habits-${activeName}`);
-                        if (saved) setHabits(JSON.parse(saved));
-                        setLoading(false);
+                const init = async () => {
+                    if (!window.FirebaseSDK) {
+                        setConnStatus('local'); setLoading(false);
+                        setHabits(JSON.parse(localStorage.getItem(`local-${activeName}`) || '[]'));
                         return;
                     }
-
-                    const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore } = window.FirebaseSDK;
-                    const app = initializeApp(firebaseConfig);
-                    const auth = getAuth(app);
-                    dbRef.current = getFirestore(app);
-
+                    const { initializeApp, getAuth, signInAnonymously, getFirestore, onAuthStateChanged } = window.FirebaseSDK;
                     try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch(e) { console.error("Auth error", e); }
-
-                    const unsubscribe = onAuthStateChanged(auth, (user) => { if (user) setAuthenticated(true); });
-                    return unsubscribe;
+                        const app = initializeApp(myCustomFirebaseConfig);
+                        const auth = getAuth(app);
+                        dbRef.current = getFirestore(app);
+                        await signInAnonymously(auth);
+                        onAuthStateChanged(auth, (user) => { if(user) { setAuthenticated(true); setConnStatus('cloud'); } });
+                    } catch(e) { setConnStatus('local'); setLoading(false); }
                 };
-
-                if (window.FirebaseSDK) setupFirebase();
-                else window.addEventListener('firebase-ready', setupFirebase);
+                if (window.FirebaseSDK) init();
+                else window.addEventListener('firebase-ready', init);
             }, [activeName]);
 
             useEffect(() => {
-                if (!firebaseConfig || !authenticated || !activeName || !dbRef.current) return;
+                if (connStatus !== 'cloud' || !authenticated || !dbRef.current) return;
                 setLoading(true);
                 const { collection, onSnapshot } = window.FirebaseSDK;
                 const habitsCol = collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName);
-                const unsubscribe = onSnapshot(habitsCol, (snapshot) => {
-                    setHabits(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                const unsub = onSnapshot(habitsCol, (snap) => {
+                    setHabits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
-                }, (err) => {
-                    console.error("Firestore error", err);
-                    setLoading(false);
-                });
-                return () => unsubscribe();
-            }, [authenticated, activeName]);
+                }, () => { setConnStatus('local'); setLoading(false); });
+                return () => unsub();
+            }, [authenticated, activeName, connStatus]);
 
             useEffect(() => {
-                if (!firebaseConfig) {
-                    localStorage.setItem(`local-habits-${activeName}`, JSON.stringify(habits));
-                }
-            }, [habits, activeName]);
+                if (connStatus === 'local') localStorage.setItem(`local-${activeName}`, JSON.stringify(habits));
+            }, [habits, activeName, connStatus]);
 
             const addHabit = async (name) => {
                 if (!name.trim()) return;
-                if (firebaseConfig && authenticated) {
-                    const { collection, addDoc } = window.FirebaseSDK;
-                    await addDoc(collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName), { name, completedDates: [], createdAt: Date.now() });
+                if (connStatus === 'cloud' && authenticated) {
+                    await window.FirebaseSDK.addDoc(window.FirebaseSDK.collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName), { name, completedDates: [], createdAt: Date.now() });
                 } else {
                     setHabits(prev => [...prev, { id: Date.now().toString(), name, completedDates: [], createdAt: Date.now() }]);
                 }
             };
 
-            const toggleHabit = async (habit) => {
-                const isDone = habit.completedDates?.includes(today);
-                const newDates = isDone ? habit.completedDates.filter(d => d !== today) : [...(habit.completedDates || []), today];
-                if (firebaseConfig && authenticated) {
-                    const { doc, updateDoc } = window.FirebaseSDK;
-                    await updateDoc(doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, habit.id), { completedDates: newDates });
+            const toggleHabit = async (h) => {
+                const isDone = h.completedDates?.includes(today);
+                const newDates = isDone ? h.completedDates.filter(d => d !== today) : [...(h.completedDates || []), today];
+                if (connStatus === 'cloud' && authenticated) {
+                    await window.FirebaseSDK.updateDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, h.id), { completedDates: newDates });
                 } else {
-                    setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, completedDates: newDates } : h));
+                    setHabits(prev => prev.map(item => item.id === h.id ? { ...item, completedDates: newDates } : item));
                 }
             };
 
             const deleteHabit = async (id) => {
                 if (!window.confirm(t.deleteConfirm)) return;
-                if (firebaseConfig && authenticated) {
-                    const { doc, deleteDoc } = window.FirebaseSDK;
-                    await deleteDoc(doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, id));
+                if (connStatus === 'cloud' && authenticated) {
+                    await window.FirebaseSDK.deleteDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, id));
                 } else {
-                    setHabits(prev => prev.filter(h => h.id !== id));
+                    setHabits(prev => prev.filter(item => item.id !== id));
                 }
             };
 
-            const updateActiveUser = (n) => {
-                setActiveName(n);
-                localStorage.setItem('habit-user-name', n);
-                if (!userList.includes(n)) {
-                    const newList = [...userList, n];
-                    setUserList(newList);
-                    localStorage.setItem('habit-user-list', JSON.stringify(newList));
-                }
-            };
-
-            const calculateStreak = (dates) => {
-                if (!dates || dates.length === 0) return 0;
-                let streak = 0, check = new Date();
-                if (!dates.includes(today)) check.setDate(check.getDate() - 1);
-                while(dates.includes(check.toISOString().split('T')[0])) { streak++; check.setDate(check.getDate() - 1); }
-                return streak;
-            };
-
-            const formattedDate = new Date().toLocaleDateString(t.dateLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-            const quote = t.quotes[Math.floor((new Date().getDate() + new Date().getMonth() * 31) % t.quotes.length)];
             const completedToday = habits.filter(h => h.completedDates?.includes(today)).length;
             const progress = habits.length > 0 ? (completedToday / habits.length) * 100 : 0;
+            const dateStr = new Date().toLocaleDateString(t.dateLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+            const quote = t.quotes[new Date().getDate() % t.quotes.length];
 
             return (
-                <div className="min-h-screen bg-slate-50 py-8 px-4 flex flex-col items-center">
-                    <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 flex flex-col h-[90vh]">
-                        <div className="bg-indigo-600 p-6 text-white relative shadow-inner">
+                <div className="min-h-screen bg-slate-50 py-4 px-2 flex flex-col items-center">
+                    <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden flex flex-col h-[92vh] border">
+                        {/* Header */}
+                        <div className="bg-indigo-600 p-5 text-white">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <h1 className="text-2xl font-bold flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-300" />{t.title}</h1>
-                                    <p className="text-[10px] flex items-center gap-1 opacity-80 mt-0.5">
-                                        <span className={`w-2 h-2 rounded-full ${firebaseConfig ? 'bg-green-400' : 'bg-orange-400'}`}></span>
-                                        {firebaseConfig ? t.statusCloud : t.statusLocal}
-                                    </p>
-                                    <p className="text-[11px] text-indigo-100 mt-2 flex items-center gap-1.5 font-medium"><CalendarDays className="w-3 h-3" />{formattedDate}</p>
-                                    <button onClick={() => { setShowUserPanel(!showUserPanel); setTempName(''); }} className="mt-3 text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10">{t.switchUser}{activeName}</button>
-                                </div>
-                                <div className="flex flex-col items-end gap-3">
-                                    <select value={lang} onChange={(e) => { setLang(e.target.value); localStorage.setItem('habit-lang', e.target.value); }} className="bg-white/10 text-white text-[10px] font-bold py-1.5 pl-2 pr-6 rounded-lg border border-white/20 appearance-none focus:outline-none cursor-pointer">
-                                        <option value="zh" className="text-slate-800">繁體中文</option>
-                                        <option value="vi" className="text-slate-800">Tiếng Việt</option>
-                                        <option value="en" className="text-slate-800">English</option>
-                                    </select>
-                                    <div className="text-right"><span className="text-3xl font-bold">{completedToday}</span><span className="text-indigo-300 text-sm">/{habits.length}</span></div>
-                                </div>
-                            </div>
-                            {showUserPanel && (
-                                <div className="bg-indigo-800/95 rounded-2xl p-4 mb-4 border border-indigo-400/30 animate-in fade-in zoom-in duration-200">
-                                    <div className="mb-4">
-                                        <p className="text-[10px] font-bold text-indigo-300 mb-2 uppercase tracking-wider">{t.recentUsers}</p>
-                                        <div className="flex flex-wrap gap-2 user-list-scroll pr-1">
-                                            {userList.map(name => (
-                                                <button key={name} onClick={() => { updateActiveUser(name); setShowUserPanel(false); }} className={`px-3 py-1.5 rounded-lg text-xs transition-all ${activeName === name ? 'bg-yellow-400 text-indigo-900 font-bold shadow-lg shadow-yellow-400/20' : 'bg-indigo-700/50 text-white hover:bg-indigo-600 border border-indigo-500/30'}`}>{name}</button>
-                                            ))}
-                                        </div>
+                                    <h1 className="text-xl font-bold flex items-center gap-2">🏆 {t.title}</h1>
+                                    <div className="flex items-center gap-1.5 text-[10px] opacity-80 mt-1">
+                                        <div className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400' : connStatus === 'syncing' ? 'bg-yellow-400' : 'bg-orange-400'}`}></div>
+                                        {connStatus === 'cloud' ? t.statusCloud : connStatus === 'syncing' ? t.statusSyncing : t.statusLocal}
                                     </div>
-                                    <form onSubmit={(e) => { e.preventDefault(); if(tempName.trim()) { updateActiveUser(tempName.trim()); setShowUserPanel(false); } }} className="pt-3 border-t border-indigo-500/30 flex gap-2">
-                                        <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} placeholder={t.inputNewName} className="flex-1 bg-indigo-900/40 border border-indigo-500/30 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-white transition-all" />
-                                        <button type="submit" className="bg-white text-indigo-600 px-4 py-2 rounded-lg text-xs font-bold">{t.switch}</button>
-                                    </form>
+                                    <div className="text-[11px] mt-2 font-medium opacity-90">{dateStr}</div>
+                                </div>
+                                <select value={lang} onChange={(e) => { setLang(e.target.value); localStorage.setItem('habit-lang', e.target.value); }} className="bg-white/10 text-white text-[10px] font-bold py-1 px-2 rounded-lg outline-none">
+                                    <option value="zh" className="text-slate-800">繁體中文</option>
+                                    <option value="vi" className="text-slate-800">Tiếng Việt</option>
+                                    <option value="en" className="text-slate-800">English</option>
+                                </select>
+                            </div>
+                            <button onClick={() => setShowUserPanel(!showUserPanel)} className="mt-2 text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10">👤 {activeName}</button>
+                            {showUserPanel && (
+                                <div className="mt-3 bg-indigo-800/90 p-3 rounded-xl animate-in fade-in zoom-in duration-200">
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                        {userList.map(n => <button key={n} onClick={() => { setActiveName(n); localStorage.setItem('habit-user-name', n); setShowUserPanel(false); }} className={`px-2 py-1 rounded-lg text-xs ${activeName === n ? 'bg-yellow-400 text-indigo-900 font-bold' : 'bg-indigo-700 text-white'}`}>{n}</button>)}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} placeholder={t.inputNewName} className="flex-1 bg-white/10 border-white/20 border rounded-lg px-2 py-1 text-xs text-white outline-none" />
+                                        <button onClick={() => { if(tempName.trim()){ const nl = [...new Set([...userList, tempName.trim()])]; setUserList(nl); localStorage.setItem('habit-user-list', JSON.stringify(nl)); setActiveName(tempName.trim()); localStorage.setItem('habit-user-name', tempName.trim()); setShowUserPanel(false); setTempName(''); }}} className="bg-white text-indigo-600 px-3 py-1 rounded-lg text-xs font-bold">{t.confirm}</button>
+                                    </div>
                                 </div>
                             )}
-                            <div className="w-full bg-indigo-900/30 rounded-full h-2 mt-3 overflow-hidden">
-                                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 h-full transition-all duration-700" style={{ width: `${progress}%` }}></div>
+                            <div className="w-full bg-indigo-900/30 h-1.5 mt-4 rounded-full overflow-hidden">
+                                <div className="bg-yellow-400 h-full transition-all duration-700" style={{ width: `${progress}%` }}></div>
                             </div>
                         </div>
 
-                        <div className="p-6 flex-1 overflow-y-auto no-scrollbar">
-                            <form onSubmit={(e) => { e.preventDefault(); addHabit(newHabitName); setNewHabitName(''); }} className="mb-6 relative">
-                                <input type="text" value={newHabitName} onChange={(e) => setNewHabitName(e.target.value)} placeholder={t.addPlaceholder} className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
-                                <button type="submit" className="absolute right-2 top-2 bottom-2 bg-indigo-600 text-white p-2 rounded-lg"><Plus className="w-5 h-5" /></button>
-                            </form>
+                        {/* Body */}
+                        <div className="p-4 flex-1 overflow-y-auto no-scrollbar">
+                            <div className="flex gap-2 mb-4">
+                                <input id="habitInput" type="text" placeholder={t.addPlaceholder} className="flex-1 border rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value.trim()){ addHabit(e.target.value); e.target.value = ''; }}} />
+                                <button onClick={() => { const input = document.getElementById('habitInput'); if(input.value.trim()){ addHabit(input.value); input.value = ''; }}} className="bg-indigo-600 text-white p-2 rounded-xl"><Plus className="w-5 h-5" /></button>
+                            </div>
 
-                            <button onClick={() => setShowAI(!showAI)} className={`w-full py-2 px-4 rounded-xl flex items-center justify-center gap-2 text-sm font-medium mb-4 transition-all ${showAI ? 'bg-purple-100 text-purple-700 border border-purple-200 shadow-sm' : 'bg-white border border-slate-200 text-slate-500'}`}>
-                                <Sparkles className="w-4 h-4" />{showAI ? t.aiButtonHide : t.aiButtonShow}
-                            </button>
-
+                            <button onClick={() => setShowAI(!showAI)} className="w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100"><Sparkles className="w-4 h-4"/> {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
                             {showAI && (
-                                <div className="bg-purple-50 rounded-xl p-4 border border-purple-100 mb-6">
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        if (!aiGoal.trim()) return;
-                                        setLoadingAI(true);
-                                        try {
-                                            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, {
-                                                method: "POST", headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({ contents: [{ parts: [{ text: `Goal/目標：${aiGoal}。${t.aiSystemPrompt}` }] }], generationConfig: { responseMimeType: "application/json" } }),
-                                            });
-                                            const data = await res.json();
-                                            setAiSuggestions(JSON.parse(data.candidates[0].content.parts[0].text));
-                                        } catch (e) { alert("AI Error"); }
-                                        setLoadingAI(false);
-                                    }} className="flex gap-2 mb-2">
-                                        <input type="text" value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} placeholder={t.aiGoalPlaceholder} className="flex-1 px-3 py-2 text-sm rounded-lg border border-purple-200 outline-none" />
-                                        <button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold" disabled={loadingAI}>{loadingAI ? <Loader2 className="w-4 h-4" /> : t.aiGenerate}</button>
-                                    </form>
-                                    <div className="space-y-2">{aiSuggestions.map((s, i) => (
-                                        <div key={i} className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm flex items-center justify-between">
-                                            <div className="flex-1 min-w-0 mr-2"><h4 className="font-bold text-sm text-slate-700">{s.name}</h4><p className="text-[10px] text-slate-500 truncate">{s.reason}</p></div>
-                                            <button onClick={() => { addHabit(s.name); setAiSuggestions(prev => prev.filter(x => x.name !== s.name)); }} className="bg-purple-100 text-purple-700 p-1.5 rounded"><Plus className="w-4 h-4" /></button>
-                                        </div>
-                                    ))}</div>
+                                <div className="mb-4 bg-purple-50 p-3 rounded-xl border border-purple-100 animate-in slide-in-from-top-2">
+                                    <div className="flex gap-2 mb-2">
+                                        <input type="text" value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} placeholder={t.aiGoalPlaceholder} className="flex-1 text-xs p-2 rounded-lg border outline-none" />
+                                        <button onClick={async () => { if(!aiGoal.trim()) return; try { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: `Goal:${aiGoal}. ${t.aiSystemPrompt}` }] }], generationConfig: { responseMimeType: "application/json" } }) }); const d = await r.json(); setAiSuggestions(JSON.parse(d.candidates[0].content.parts[0].text)); } catch(e) { alert("AI Error"); } }} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold">{t.aiGenerate}</button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {aiSuggestions.map((s, i) => <div key={i} className="bg-white p-2 rounded-lg flex justify-between items-center text-[10px] shadow-sm"><span><b>{s.name}</b>: {s.reason}</span><button onClick={() => { addHabit(s.name); setAiSuggestions(prev => prev.filter(x => x.name !== s.name)); }} className="text-purple-600 font-bold">+</button></div>)}
+                                    </div>
                                 </div>
                             )}
 
-                            {loading ? <div className="text-center py-10 text-slate-300 text-sm animate-pulse italic">{t.syncing}</div> : (
-                                <div className="space-y-3 pb-4">{habits.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0)).map(habit => {
-                                    const isDone = habit.completedDates?.includes(today);
-                                    const streak = calculateStreak(habit.completedDates);
-                                    return (
-                                        <div key={habit.id} className={`p-4 rounded-2xl border transition-all duration-300 ${isDone ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100 shadow-sm'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => toggleHabit(habit)}>
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDone ? 'bg-green-500 text-white scale-110' : 'bg-slate-50 text-slate-300'}`}><Check className="w-5 h-5" strokeWidth={3} /></div>
-                                                    <div><h3 className={`font-semibold text-sm transition-all ${isDone ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{habit.name}</h3><span className="text-[10px] text-orange-500 font-bold flex items-center gap-0.5"><Flame className="w-3 h-3" fill="currentColor"/> {streak} {t.streak}</span></div>
+                            {loading ? <div className="text-center py-10 text-slate-300 text-xs italic animate-pulse">Loading...</div> : (
+                                <div className="space-y-3">
+                                    {habits.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0)).map(h => {
+                                        const isDone = h.completedDates?.includes(today);
+                                        let streak = 0, c = new Date();
+                                        if(!h.completedDates?.includes(today)) c.setDate(c.getDate()-1);
+                                        while(h.completedDates?.includes(c.toISOString().split('T')[0])){ streak++; c.setDate(c.getDate()-1); }
+                                        return (
+                                            <div key={h.id} className={`p-3 rounded-2xl border transition-all ${isDone ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100 shadow-sm'}`}>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleHabit(h)}>
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDone ? 'bg-green-500 text-white' : 'bg-slate-50 text-slate-300'}`}><Check className="w-4 h-4" /></div>
+                                                        <div><h3 className={`text-sm font-bold ${isDone ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{h.name}</h3><span className="text-[9px] text-orange-500 font-bold">🔥 {streak} {t.streak}</span></div>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => setExpandedId(expandedId === h.id ? null : h.id)} className={`p-1.5 rounded-lg ${expandedId === h.id ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300'}`}><CalendarIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => deleteHabit(h.id)} className="text-slate-100 hover:text-red-400 transition-colors"><Trash className="w-4 h-4" /></button>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => setExpandedHabitId(expandedHabitId === habit.id ? null : habit.id)} className={`p-2 rounded-lg ${expandedHabitId === habit.id ? 'bg-indigo-100 text-indigo-600' : 'text-slate-200'}`}><CalendarIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => deleteHabit(habit.id)} className="text-slate-100 hover:text-red-400 p-2"><Trash2 className="w-4 h-4" /></button>
-                                                </div>
+                                                {expandedId === h.id && <MiniCalendar completedDates={h.completedDates} colorClass={isDone ? 'bg-green-500' : 'bg-indigo-500'} lang={lang} />}
                                             </div>
-                                            {expandedHabitId === habit.id && <MiniCalendar completedDates={habit.completedDates} colorClass={isDone ? 'bg-green-500' : 'bg-indigo-500'} lang={lang} />}
-                                        </div>
-                                    );
-                                })}</div>
+                                        );
+                                    })}
+                                    {habits.length === 0 && <div className="text-center py-10 text-slate-300 text-xs italic">{t.noHabits}</div>}
+                                </div>
                             )}
                         </div>
-                        <div className="p-5 bg-slate-50 border-t border-slate-100 flex flex-col items-center gap-2 w-full">
-                            <QuoteIcon className="w-4 h-4 text-indigo-200 opacity-50 flex-shrink-0" />
-                            <p className="text-xs text-slate-500 italic font-medium text-center leading-relaxed px-4">"{quote}"</p>
+
+                        {/* Footer Quote */}
+                        <div className="p-4 bg-slate-50 border-t flex flex-col items-center gap-1">
+                            <span className="text-indigo-200 text-lg">“</span>
+                            <p className="text-[10px] text-slate-500 italic text-center leading-tight px-4 whitespace-normal font-medium">
+                                {quote}
+                            </p>
                         </div>
                     </div>
                 </div>
