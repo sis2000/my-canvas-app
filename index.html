@@ -34,6 +34,14 @@
         
         .btn-user-press { transition: transform 1.5s linear, background-color 1.5s linear; }
         .long-press-active { transform: scale(0.9) !important; background-color: #ef4444 !important; color: white !important; }
+        
+        /* 同步動畫 */
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(74, 222, 128, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
+        .sync-active { animation: pulse-green 2s infinite; }
     </style>
 </head>
 <body>
@@ -61,10 +69,11 @@
                 statusLocal: "本機模式",
                 statusCloud: "雲端同步中",
                 statusSyncing: "連線中...",
-                statusError: "權限被拒 (請檢查 Rules)",
+                statusError: "權限被拒",
                 switchUser: "切換使用者",
                 recentUsers: "最近使用的使用者",
-                longPressTip: "(按住按鈕 1.5 秒可「永久刪除」)",
+                longPressTip: "(長按按鈕 1.5 秒可「永久刪除」此人)",
+                syncTip: "💡 提示：手機與電腦必須輸入「相同名稱」才能看到彼此資料。",
                 inputNewName: "輸入新名稱...",
                 confirm: "確認",
                 cancel: "取消",
@@ -72,21 +81,22 @@
                 noHabits: "目前沒有習慣，新增一個吧！",
                 deleteHabitConfirm: "確定要刪除這個習慣嗎？",
                 deleteUserTitle: "永久刪除使用者",
-                deleteUserBody: "確定要刪除使用者 「{name}」 嗎？這將連同雲端上的資料一併永久抹除！",
+                deleteUserBody: "確定要刪除 「{name}」？這將連同雲端資料一併永久抹除！",
                 months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
                 days: ['日','一','二','三','四','五','六'],
                 dateLocale: "zh-TW",
-                quotes: ["成功源於每天的累積。","卓越不是行為，而是習慣。","每天進步1%，一年後強大37倍。"]
+                quotes: ["成功源於每天的累積。","卓越不是行為，而是習慣。","每天進步1%"]
             },
             vi: {
                 title: "Thói Quen Cloud",
                 statusLocal: "Chế độ nội bộ",
                 statusCloud: "Đang đồng bộ",
                 statusSyncing: "Đang kết nối...",
-                statusError: "Lỗi quyền (Rules)",
+                statusError: "Lỗi quyền",
                 switchUser: "Người dùng",
                 recentUsers: "Gần đây",
                 longPressTip: "(Nhấn giữ 1.5s để xóa)",
+                syncTip: "Mẹo: PC và điện thoại phải cùng tên mới đồng bộ được.",
                 inputNewName: "Nhập tên mới...",
                 confirm: "Xác nhận",
                 cancel: "Hủy",
@@ -94,7 +104,7 @@
                 noHabits: "Chưa có thói quen!",
                 deleteHabitConfirm: "Xóa thói quen?",
                 deleteUserTitle: "Xóa vĩnh viễn",
-                deleteUserBody: "Bạn có chắc muốn xóa 「{name}」 và toàn bộ dữ liệu Cloud?",
+                deleteUserBody: "Bạn có chắc muốn xóa 「{name}」?",
                 months: ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"],
                 days: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
                 dateLocale: "vi-VN",
@@ -109,6 +119,7 @@
                 switchUser: "Switch User",
                 recentUsers: "Recent Users",
                 longPressTip: "(Hold for 1.5s to delete)",
+                syncTip: "Tip: PC and Phone must use the SAME name to sync.",
                 inputNewName: "Enter name...",
                 confirm: "Confirm",
                 cancel: "Cancel",
@@ -128,12 +139,12 @@
             if (!isOpen) return null;
             return (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl w-full max-w-xs p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100">
+                    <div className="bg-white rounded-2xl w-full max-w-xs p-6 shadow-2xl animate-in zoom-in-95 duration-200 border">
                         <h3 className="text-lg font-bold text-slate-800 mb-2">{title}</h3>
                         <p className="text-sm text-slate-500 mb-6 leading-relaxed">{body}</p>
                         <div className="flex gap-3">
-                            <button onClick={onCancel} className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors">{cancelText}</button>
-                            <button onClick={onConfirm} className="flex-1 py-2 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 shadow-lg shadow-red-200 transition-colors">{confirmText}</button>
+                            <button onClick={onCancel} className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm">{cancelText}</button>
+                            <button onClick={onConfirm} className="flex-1 py-2 rounded-xl bg-red-500 text-white font-bold text-sm shadow-lg shadow-red-200">{confirmText}</button>
                         </div>
                     </div>
                 </div>
@@ -176,7 +187,6 @@
             const [habits, setHabits] = useState([]);
             const [loading, setLoading] = useState(true);
             const [connStatus, setConnStatus] = useState('syncing'); 
-            const [authenticated, setAuthenticated] = useState(false);
             const [showUserPanel, setShowUserPanel] = useState(false);
             const [tempName, setTempName] = useState('');
             const [showAI, setShowAI] = useState(false);
@@ -204,25 +214,20 @@
                         
                         sdk.onAuthStateChanged(authRef.current, async (user) => {
                             if (user) {
-                                setAuthenticated(true);
                                 setConnStatus('cloud');
                             } else {
                                 sdk.signInAnonymously(authRef.current).catch(() => setConnStatus('local'));
                             }
                         });
-                    } catch (e) {
-                        setConnStatus('local');
-                        setLoading(false);
-                    }
+                    } catch (e) { setConnStatus('local'); setLoading(false); }
                 };
-
                 if (window.FirebaseSDK) initFirebase();
                 else window.addEventListener('firebase-ready', initFirebase);
             }, []);
 
-            // 2. 監聽習慣資料 (路徑：user_habits/{userName}/list)
+            // 2. 核心同步邏輯 (路徑：user_habits/{activeName}/list)
             useEffect(() => {
-                if (connStatus !== 'cloud' || !authenticated || !dbRef.current) {
+                if (connStatus !== 'cloud' || !dbRef.current) {
                     if (connStatus !== 'syncing') {
                         setHabits(JSON.parse(localStorage.getItem(`local-${activeName}`) || '[]'));
                         setLoading(false);
@@ -235,21 +240,20 @@
                 const unsub = onSnapshot(collection(dbRef.current, 'user_habits', activeName, 'list'), (snap) => {
                     setHabits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
-                    setConnStatus('cloud');
                 }, (err) => {
                     if (err.code === 'permission-denied') setConnStatus('error');
                     else setConnStatus('local');
                     setLoading(false);
                 });
                 return () => unsub();
-            }, [activeName, connStatus, authenticated]);
+            }, [activeName, connStatus]);
 
             // 3. 備份
             useEffect(() => {
                 localStorage.setItem(`local-${activeName}`, JSON.stringify(habits));
             }, [habits, activeName]);
 
-            // --- 長按邏輯 ---
+            // --- 操作邏輯 ---
             const startPress = (name) => {
                 setPressingUser(name);
                 hasTriggeredLongPress.current = false;
@@ -290,7 +294,7 @@
 
             const addHabit = async (n) => {
                 if (!n.trim()) return;
-                if (connStatus === 'cloud' && authenticated) {
+                if (connStatus === 'cloud') {
                     await window.FirebaseSDK.addDoc(window.FirebaseSDK.collection(dbRef.current, 'user_habits', activeName, 'list'), { name: n, completedDates: [], createdAt: Date.now() });
                 } else {
                     setHabits(prev => [...prev, { id: Date.now().toString(), name: n, completedDates: [], createdAt: Date.now() }]);
@@ -300,7 +304,7 @@
             const toggleHabit = (h) => {
                 const isDone = h.completedDates?.includes(today);
                 const newDates = isDone ? h.completedDates.filter(d => d !== today) : [...(h.completedDates || []), today];
-                if (connStatus === 'cloud' && authenticated) {
+                if (connStatus === 'cloud') {
                     window.FirebaseSDK.updateDoc(window.FirebaseSDK.doc(dbRef.current, 'user_habits', activeName, 'list', h.id), { completedDates: newDates });
                 } else {
                     setHabits(prev => prev.map(item => item.id === h.id ? { ...item, completedDates: newDates } : item));
@@ -308,7 +312,7 @@
             };
 
             const confirmDeleteHabit = (id) => {
-                if (connStatus === 'cloud' && authenticated) {
+                if (connStatus === 'cloud') {
                     window.FirebaseSDK.deleteDoc(window.FirebaseSDK.doc(dbRef.current, 'user_habits', activeName, 'list', id));
                 } else {
                     setHabits(prev => prev.filter(item => item.id !== id));
@@ -317,6 +321,7 @@
             };
 
             const progress = habits.length > 0 ? (habits.filter(h => h.completedDates?.includes(today)).length / habits.length) * 100 : 0;
+            const quote = translations[lang].quotes[new Date().getDate() % translations[lang].quotes.length];
 
             return (
                 <div className="min-h-screen bg-slate-50 py-4 px-2 flex flex-col items-center">
@@ -328,7 +333,7 @@
                                 <div>
                                     <h1 className="text-xl font-bold flex items-center gap-2">🏆 {t.title}</h1>
                                     <p className="text-[10px] flex items-center gap-1 opacity-80 mt-1">
-                                        <span className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400' : connStatus === 'error' ? 'bg-red-400' : 'bg-yellow-400'}`}></span>
+                                        <span className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400 sync-active' : connStatus === 'error' ? 'bg-red-400' : 'bg-yellow-400'}`}></span>
                                         {connStatus === 'cloud' ? t.statusCloud : connStatus === 'error' ? t.statusError : t.statusSyncing}
                                     </p>
                                     <div className="text-[11px] mt-2 font-medium opacity-90">{new Date().toLocaleDateString(t.dateLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
@@ -338,7 +343,12 @@
                                 </select>
                             </div>
                             
-                            <button onClick={() => setShowUserPanel(!showUserPanel)} className="mt-2 text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10 transition-all hover:bg-white/20 active:scale-95">👤 {activeName}</button>
+                            <div className="mt-2 flex items-center gap-2">
+                                <button onClick={() => setShowUserPanel(!showUserPanel)} className="text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10 transition-all hover:bg-white/20 active:scale-95">
+                                    👤 {activeName}
+                                </button>
+                                {connStatus === 'cloud' && <span className="text-[9px] text-indigo-200">正在同步此名稱的資料...</span>}
+                            </div>
                             
                             {showUserPanel && (
                                 <div className="mt-3 bg-indigo-800/90 p-4 rounded-xl shadow-xl border border-indigo-700 animate-in fade-in zoom-in duration-200">
@@ -346,28 +356,14 @@
                                     <p className="text-[8px] text-indigo-300 mb-3 italic">{t.longPressTip}</p>
                                     <div className="flex flex-wrap gap-2 mb-4 user-list-scroll pr-1">
                                         {userList.map(n => (
-                                            <button 
-                                                key={n}
-                                                onMouseDown={() => startPress(n)}
-                                                onMouseUp={() => endPress(n)}
-                                                onMouseLeave={() => setPressingUser(null)}
-                                                onTouchStart={() => startPress(n)}
-                                                onTouchEnd={() => endPress(n)}
-                                                onContextMenu={(e) => e.preventDefault()}
-                                                className={`btn-user-press px-3 py-1.5 rounded-lg text-xs select-none ${
-                                                    activeName === n 
-                                                        ? 'bg-yellow-400 text-indigo-900 font-bold shadow-lg shadow-yellow-400/20' 
-                                                        : 'bg-indigo-700 text-white'
-                                                } ${pressingUser === n ? 'long-press-active' : ''}`}
-                                            >
-                                                {n}
-                                            </button>
+                                            <button key={n} onMouseDown={() => startPress(n)} onMouseUp={() => endPress(n)} onMouseLeave={() => setPressingUser(null)} onTouchStart={() => startPress(n)} onTouchEnd={() => endPress(n)} onContextMenu={(e) => e.preventDefault()} className={`btn-user-press px-3 py-1.5 rounded-lg text-xs select-none ${activeName === n ? 'bg-yellow-400 text-indigo-900 font-bold shadow-lg shadow-yellow-400/20' : 'bg-indigo-700 text-white'} ${pressingUser === n ? 'long-press-active' : ''}`}>{n}</button>
                                         ))}
                                     </div>
                                     <div className="flex gap-2">
                                         <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} placeholder={t.inputNewName} className="flex-1 bg-white/10 border-white/20 border rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-white/50" />
                                         <button onClick={() => { if(tempName.trim()){ const nl = [...new Set([...userList, tempName.trim()])]; setUserList(nl); localStorage.setItem('habit-user-list', JSON.stringify(nl)); setActiveName(tempName.trim()); localStorage.setItem('habit-user-name', tempName.trim()); setShowUserPanel(false); setTempName(''); }}} className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95">{t.confirm}</button>
                                     </div>
+                                    <p className="text-[8px] text-indigo-300 mt-3 leading-tight">{t.syncTip}</p>
                                 </div>
                             )}
                             <div className="w-full bg-indigo-900/30 h-1.5 mt-4 rounded-full overflow-hidden">
@@ -381,7 +377,7 @@
                                 <button onClick={() => { const input = document.getElementById('habitInput'); if(input.value.trim()){ addHabit(input.value); input.value = ''; }}} className="bg-indigo-600 text-white p-2 rounded-xl active:scale-95 transition-transform font-bold">＋</button>
                             </div>
                             
-                            <button onClick={() => setShowAI(!showAI)} className={`w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100 transition-all hover:bg-purple-100 font-serif font-bold`}>✨ {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
+                            <button onClick={() => setShowAI(!showAI)} className={`w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100 transition-all hover:bg-purple-100 font-serif`}>✨ {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
                             
                             {showAI && (
                                 <div className="mb-4 bg-purple-50 p-3 rounded-xl border border-purple-100 animate-in slide-in-from-top-2">
@@ -393,7 +389,7 @@
                                 </div>
                             )}
 
-                            {loading ? <div className="text-center py-10 text-slate-300 text-xs italic animate-pulse">Loading...</div> : (
+                            {loading ? <div className="text-center py-10 text-slate-300 text-xs italic animate-pulse">Syncing...</div> : (
                                 <div className="space-y-3">
                                     {habits.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0)).map(h => {
                                         const isDone = h.completedDates?.includes(today);
