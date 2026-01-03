@@ -11,14 +11,14 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Firebase SDK 模組 (新增 getDocs 以便進行整站刪除) -->
+    <!-- 2. Firebase SDK 模組 -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
         window.FirebaseSDK = { 
-            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, 
+            initializeApp, getApps, getApp, getAuth, signInAnonymously, onAuthStateChanged, 
             getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query, getDocs
         };
         window.dispatchEvent(new Event('firebase-ready'));
@@ -32,14 +32,8 @@
         .user-list-scroll::-webkit-scrollbar { width: 4px; }
         .user-list-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
         
-        .btn-user-press {
-            transition: transform 1.5s linear, background-color 1.5s linear;
-        }
-        .long-press-active {
-            transform: scale(0.9) !important;
-            background-color: #ef4444 !important;
-            color: white !important;
-        }
+        .btn-user-press { transition: transform 1.5s linear, background-color 1.5s linear; }
+        .long-press-active { transform: scale(0.9) !important; background-color: #ef4444 !important; color: white !important; }
     </style>
 </head>
 <body>
@@ -48,6 +42,9 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // ========================================================
+        // 【設定區】您的專屬連線資訊
+        // ========================================================
         const myCustomFirebaseConfig = {
             apiKey: "AIzaSyAZZGBhfoPg8jfO78D0Z6irPRLgNBW_yPE",
             authDomain: "github-5d518.firebaseapp.com",
@@ -57,7 +54,6 @@
             appId: "1:562364204504:web:9911be99590c2b1fd41ead"
         };
         const geminiApiKey = "AIzaSyCm3_30XFuMUBlfvTCnWKPaWrUGoxpW1gc";
-        const appId = 'habit-tracker-sync';
 
         const translations = {
             zh: {
@@ -65,78 +61,66 @@
                 statusLocal: "本機模式",
                 statusCloud: "雲端同步中",
                 statusSyncing: "連線中...",
+                statusError: "權限被拒 (請檢查 Rules)",
                 switchUser: "切換使用者",
                 recentUsers: "最近使用的使用者",
-                longPressTip: "(按住按鈕 1.5 秒可「永久刪除」使用者)",
+                longPressTip: "(按住按鈕 1.5 秒可「永久刪除」)",
                 inputNewName: "輸入新名稱...",
-                confirm: "確認刪除",
+                confirm: "確認",
                 cancel: "取消",
-                switch: "切換",
-                todayProgress: "今日進度",
-                addPlaceholder: "新增今天的挑戰...",
-                aiButtonShow: "獲取 AI 建議",
-                aiButtonHide: "隱藏 AI 建議",
                 streak: "天連續",
-                noHabits: "還沒有習慣，新增一個吧！",
+                noHabits: "目前沒有習慣，新增一個吧！",
                 deleteHabitConfirm: "確定要刪除這個習慣嗎？",
                 deleteUserTitle: "永久刪除使用者",
-                deleteUserBody: "確定要刪除使用者 「{name}」 嗎？這將會連同雲端上的所有習慣資料一併抹除，且無法復原！",
+                deleteUserBody: "確定要刪除使用者 「{name}」 嗎？這將連同雲端上的資料一併永久抹除！",
                 months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
                 days: ['日','一','二','三','四','五','六'],
                 dateLocale: "zh-TW",
-                quotes: ["成功源於每天的累積。","卓越不是行為，而是習慣。","每天進步1%，一年後強大37倍。","你是自己習慣的產物。"]
+                quotes: ["成功源於每天的累積。","卓越不是行為，而是習慣。","每天進步1%，一年後強大37倍。"]
             },
             vi: {
                 title: "Thói Quen Cloud",
                 statusLocal: "Chế độ nội bộ",
                 statusCloud: "Đang đồng bộ",
                 statusSyncing: "Đang kết nối...",
+                statusError: "Lỗi quyền (Rules)",
                 switchUser: "Người dùng",
-                recentUsers: "Người dùng gần đây",
-                longPressTip: "(Nhấn giữ 1.5s để XÓA VĨNH VIỄN)",
+                recentUsers: "Gần đây",
+                longPressTip: "(Nhấn giữ 1.5s để xóa)",
                 inputNewName: "Nhập tên mới...",
-                confirm: "Xác nhận xóa",
+                confirm: "Xác nhận",
                 cancel: "Hủy",
-                switch: "Đổi",
-                todayProgress: "Tiến độ hôm nay",
-                addPlaceholder: "Thêm thử thách...",
-                aiButtonShow: "Gợi ý AI",
-                aiButtonHide: "Ẩn AI",
                 streak: "ngày liên tiếp",
                 noHabits: "Chưa có thói quen!",
-                deleteHabitConfirm: "Xóa thói quen này?",
-                deleteUserTitle: "Xóa vĩnh viễn người dùng",
-                deleteUserBody: "Bạn có chắc muốn xóa 「{name}」? Tất cả dữ liệu trên Cloud cũng sẽ bị xóa và không thể khôi phục!",
+                deleteHabitConfirm: "Xóa thói quen?",
+                deleteUserTitle: "Xóa vĩnh viễn",
+                deleteUserBody: "Bạn có chắc muốn xóa 「{name}」 và toàn bộ dữ liệu Cloud?",
                 months: ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"],
                 days: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
                 dateLocale: "vi-VN",
-                quotes: ["Thành công là hành trình nỗ lực.","Sự xuất sắc là một thói quen.","Tiến bộ mỗi ngày 1%.","Bạn là kết quả của thói quen."]
+                quotes: ["Thành công là hành trình nỗ lực.","Sự xuất sắc là một thói quen."]
             },
             en: {
                 title: "Habit Tracker",
                 statusLocal: "Local Mode",
                 statusCloud: "Cloud Synced",
                 statusSyncing: "Connecting...",
+                statusError: "Permission Denied",
                 switchUser: "Switch User",
                 recentUsers: "Recent Users",
-                longPressTip: "(Hold 1.5s to PERMANENTLY delete)",
+                longPressTip: "(Hold for 1.5s to delete)",
                 inputNewName: "Enter name...",
-                confirm: "Delete All",
+                confirm: "Confirm",
                 cancel: "Cancel",
-                switch: "Switch",
-                todayProgress: "Today's Progress",
-                addPlaceholder: "Add a habit...",
-                aiButtonShow: "AI Suggestions",
-                aiButtonHide: "Hide AI",
                 streak: "day streak",
                 noHabits: "No habits yet!",
                 deleteHabitConfirm: "Are you sure?",
-                deleteUserTitle: "Delete User Permanently",
-                deleteUserBody: "Are you sure you want to delete user 「{name}」? This will erase ALL their data from the cloud permanently!",
+                deleteUserTitle: "Delete Permanently",
+                deleteUserBody: "Delete user 「{name}」 and all their cloud data?",
                 months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
                 days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
                 dateLocale: "en-US",
-                quotes: ["Success is daily repetition.","Excellence is a habit.","1% better every day.","You are your habits."]
+                quotes: ["Excellence is not an act, but a habit.","Success is small efforts repeated."]
             }
         };
 
@@ -179,9 +163,7 @@
                         <span>{t.months[m]} {y}</span>
                         <button onClick={() => setViewDate(new Date(y, m + 1, 1))}>&gt;</button>
                     </div>
-                    <div className="grid grid-cols-7 gap-1 text-center">
-                        {t.days.map(d => <div key={d} className="text-[10px] text-slate-400 font-bold">{d}</div>)}{renderDays()}
-                    </div>
+                    <div className="grid grid-cols-7 gap-1 text-center">{t.days.map(d => <div key={d} className="text-[10px] text-slate-400 font-bold">{d}</div>)}{renderDays()}</div>
                 </div>
             );
         };
@@ -193,7 +175,7 @@
             const [userList, setUserList] = useState(() => JSON.parse(localStorage.getItem('habit-user-list') || '["Guest"]'));
             const [habits, setHabits] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [connStatus, setConnStatus] = useState('syncing');
+            const [connStatus, setConnStatus] = useState('syncing'); 
             const [authenticated, setAuthenticated] = useState(false);
             const [showUserPanel, setShowUserPanel] = useState(false);
             const [tempName, setTempName] = useState('');
@@ -201,50 +183,73 @@
             const [aiGoal, setAiGoal] = useState('');
             const [aiSuggestions, setAiSuggestions] = useState([]);
             const [expandedId, setExpandedId] = useState(null);
-
             const [modal, setModal] = useState({ isOpen: false, type: '', data: null });
+            
             const pressTimer = useRef(null);
             const [pressingUser, setPressingUser] = useState(null);
             const hasTriggeredLongPress = useRef(false);
-
             const dbRef = useRef(null);
+            const authRef = useRef(null);
             const today = new Date().toISOString().split('T')[0];
 
+            // 1. 初始化 Firebase 
             useEffect(() => {
-                const init = async () => {
-                    if (!window.FirebaseSDK) {
-                        setConnStatus('local'); setLoading(false);
-                        setHabits(JSON.parse(localStorage.getItem(`local-${activeName}`) || '[]'));
-                        return;
-                    }
-                    const { initializeApp, getAuth, signInAnonymously, getFirestore, onAuthStateChanged } = window.FirebaseSDK;
+                const initFirebase = async () => {
+                    const sdk = window.FirebaseSDK;
+                    if (!sdk) { setConnStatus('local'); setLoading(false); return; }
                     try {
-                        const app = initializeApp(myCustomFirebaseConfig);
-                        const auth = getAuth(app);
-                        dbRef.current = getFirestore(app);
-                        await signInAnonymously(auth);
-                        onAuthStateChanged(auth, (u) => { if(u) { setAuthenticated(true); setConnStatus('cloud'); } });
-                    } catch(e) { setConnStatus('local'); setLoading(false); }
+                        let app = sdk.getApps().length === 0 ? sdk.initializeApp(myCustomFirebaseConfig) : sdk.getApp();
+                        authRef.current = sdk.getAuth(app);
+                        dbRef.current = sdk.getFirestore(app);
+                        
+                        sdk.onAuthStateChanged(authRef.current, async (user) => {
+                            if (user) {
+                                setAuthenticated(true);
+                                setConnStatus('cloud');
+                            } else {
+                                sdk.signInAnonymously(authRef.current).catch(() => setConnStatus('local'));
+                            }
+                        });
+                    } catch (e) {
+                        setConnStatus('local');
+                        setLoading(false);
+                    }
                 };
-                if (window.FirebaseSDK) init();
-                else window.addEventListener('firebase-ready', init);
-            }, [activeName]);
 
+                if (window.FirebaseSDK) initFirebase();
+                else window.addEventListener('firebase-ready', initFirebase);
+            }, []);
+
+            // 2. 監聽習慣資料 (路徑：user_habits/{userName}/list)
             useEffect(() => {
-                if (connStatus !== 'cloud' || !authenticated || !activeName || !dbRef.current) return;
+                if (connStatus !== 'cloud' || !authenticated || !dbRef.current) {
+                    if (connStatus !== 'syncing') {
+                        setHabits(JSON.parse(localStorage.getItem(`local-${activeName}`) || '[]'));
+                        setLoading(false);
+                    }
+                    return;
+                }
+                
                 setLoading(true);
-                const unsub = window.FirebaseSDK.onSnapshot(window.FirebaseSDK.collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName), (snap) => {
+                const { collection, onSnapshot } = window.FirebaseSDK;
+                const unsub = onSnapshot(collection(dbRef.current, 'user_habits', activeName, 'list'), (snap) => {
                     setHabits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
-                }, () => { setConnStatus('local'); setLoading(false); });
+                    setConnStatus('cloud');
+                }, (err) => {
+                    if (err.code === 'permission-denied') setConnStatus('error');
+                    else setConnStatus('local');
+                    setLoading(false);
+                });
                 return () => unsub();
-            }, [authenticated, activeName, connStatus]);
+            }, [activeName, connStatus, authenticated]);
 
+            // 3. 備份
             useEffect(() => {
-                if (connStatus === 'local') localStorage.setItem(`local-${activeName}`, JSON.stringify(habits));
-            }, [habits, activeName, connStatus]);
+                localStorage.setItem(`local-${activeName}`, JSON.stringify(habits));
+            }, [habits, activeName]);
 
-            // --- 長按處理邏輯 ---
+            // --- 長按邏輯 ---
             const startPress = (name) => {
                 setPressingUser(name);
                 hasTriggeredLongPress.current = false;
@@ -256,10 +261,7 @@
             };
 
             const endPress = (name) => {
-                if (pressTimer.current) {
-                    clearTimeout(pressTimer.current);
-                    pressTimer.current = null;
-                }
+                if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
                 if (!hasTriggeredLongPress.current && pressingUser === name) {
                     setActiveName(name);
                     localStorage.setItem('habit-user-name', name);
@@ -268,47 +270,30 @@
                 setPressingUser(null);
             };
 
-            // 【核心變更：刪除使用者同時刪除雲端資料】
             const confirmDeleteUser = async () => {
                 const nameToDelete = modal.data;
-                
-                // 1. 如果是雲端模式，刪除該使用者在雲端的所有文件
-                if (connStatus === 'cloud' && authenticated && dbRef.current) {
+                if (connStatus === 'cloud' && dbRef.current) {
                     const { collection, getDocs, deleteDoc, doc } = window.FirebaseSDK;
-                    const userColRef = collection(dbRef.current, 'artifacts', appId, 'public', 'data', nameToDelete);
                     try {
-                        const querySnapshot = await getDocs(userColRef);
-                        const deletePromises = querySnapshot.docs.map(d => 
-                            deleteDoc(doc(dbRef.current, 'artifacts', appId, 'public', 'data', nameToDelete, d.id))
-                        );
-                        await Promise.all(deletePromises);
-                    } catch (error) {
-                        console.error("Cloud deletion failed:", error);
-                    }
+                        const snap = await getDocs(collection(dbRef.current, 'user_habits', nameToDelete, 'list'));
+                        await Promise.all(snap.docs.map(d => deleteDoc(doc(dbRef.current, 'user_habits', nameToDelete, 'list', d.id))));
+                    } catch (e) {}
                 }
-
-                // 2. 本地邏輯執行
                 const newList = userList.filter(n => n !== nameToDelete);
                 const nextActive = activeName === nameToDelete ? (newList[0] || 'Guest') : activeName;
-                
                 setUserList(newList);
                 localStorage.setItem('habit-user-list', JSON.stringify(newList));
-                localStorage.removeItem(`local-${nameToDelete}`); // 同時清除本地快取
-                
-                if (activeName === nameToDelete) {
-                    setActiveName(nextActive);
-                    localStorage.setItem('habit-user-name', nextActive);
-                }
+                localStorage.removeItem(`local-${nameToDelete}`);
+                if (activeName === nameToDelete) { setActiveName(nextActive); localStorage.setItem('habit-user-name', nextActive); }
                 setModal({ isOpen: false, type: '', data: null });
             };
 
-            // --- 習慣操作 ---
-            const addHabit = async (name) => {
-                if (!name.trim()) return;
+            const addHabit = async (n) => {
+                if (!n.trim()) return;
                 if (connStatus === 'cloud' && authenticated) {
-                    await window.FirebaseSDK.addDoc(window.FirebaseSDK.collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName), { name, completedDates: [], createdAt: Date.now() });
+                    await window.FirebaseSDK.addDoc(window.FirebaseSDK.collection(dbRef.current, 'user_habits', activeName, 'list'), { name: n, completedDates: [], createdAt: Date.now() });
                 } else {
-                    setHabits(prev => [...prev, { id: Date.now().toString(), name, completedDates: [], createdAt: Date.now() }]);
+                    setHabits(prev => [...prev, { id: Date.now().toString(), name: n, completedDates: [], createdAt: Date.now() }]);
                 }
             };
 
@@ -316,7 +301,7 @@
                 const isDone = h.completedDates?.includes(today);
                 const newDates = isDone ? h.completedDates.filter(d => d !== today) : [...(h.completedDates || []), today];
                 if (connStatus === 'cloud' && authenticated) {
-                    window.FirebaseSDK.updateDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, h.id), { completedDates: newDates });
+                    window.FirebaseSDK.updateDoc(window.FirebaseSDK.doc(dbRef.current, 'user_habits', activeName, 'list', h.id), { completedDates: newDates });
                 } else {
                     setHabits(prev => prev.map(item => item.id === h.id ? { ...item, completedDates: newDates } : item));
                 }
@@ -324,52 +309,39 @@
 
             const confirmDeleteHabit = (id) => {
                 if (connStatus === 'cloud' && authenticated) {
-                    window.FirebaseSDK.deleteDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, id));
+                    window.FirebaseSDK.deleteDoc(window.FirebaseSDK.doc(dbRef.current, 'user_habits', activeName, 'list', id));
                 } else {
                     setHabits(prev => prev.filter(item => item.id !== id));
                 }
                 setModal({ isOpen: false, type: '', data: null });
             };
 
-            const completedToday = habits.filter(h => h.completedDates?.includes(today)).length;
-            const progress = habits.length > 0 ? (completedToday / habits.length) * 100 : 0;
-            const quote = t.quotes[new Date().getDate() % t.quotes.length];
+            const progress = habits.length > 0 ? (habits.filter(h => h.completedDates?.includes(today)).length / habits.length) * 100 : 0;
 
             return (
                 <div className="min-h-screen bg-slate-50 py-4 px-2 flex flex-col items-center">
                     <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden flex flex-col h-[92vh] border">
+                        <CustomModal isOpen={modal.isOpen} title={modal.type === 'user' ? t.deleteUserTitle : '刪除確認'} body={modal.type === 'user' ? t.deleteUserBody.replace('{name}', modal.data) : t.deleteHabitConfirm} onConfirm={modal.type === 'user' ? confirmDeleteUser : () => confirmDeleteHabit(modal.data)} onCancel={() => setModal({ isOpen: false, type: '', data: null })} confirmText={t.confirm} cancelText={t.cancel} />
                         
-                        <CustomModal 
-                            isOpen={modal.isOpen}
-                            title={modal.type === 'user' ? t.deleteUserTitle : '刪除確認'}
-                            body={modal.type === 'user' ? t.deleteUserBody.replace('{name}', modal.data) : t.deleteHabitConfirm}
-                            onConfirm={modal.type === 'user' ? confirmDeleteUser : () => confirmDeleteHabit(modal.data)}
-                            onCancel={() => setModal({ isOpen: false, type: '', data: null })}
-                            confirmText={t.confirm}
-                            cancelText={t.cancel}
-                        />
-
                         <div className="bg-indigo-600 p-5 text-white">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <h1 className="text-xl font-bold flex items-center gap-2">🏆 {t.title}</h1>
-                                    <div className="flex items-center gap-1.5 text-[10px] opacity-80 mt-1">
-                                        <div className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400' : 'bg-orange-400'}`}></div>
-                                        {connStatus === 'cloud' ? t.statusCloud : t.statusLocal}
-                                    </div>
+                                    <p className="text-[10px] flex items-center gap-1 opacity-80 mt-1">
+                                        <span className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400' : connStatus === 'error' ? 'bg-red-400' : 'bg-yellow-400'}`}></span>
+                                        {connStatus === 'cloud' ? t.statusCloud : connStatus === 'error' ? t.statusError : t.statusSyncing}
+                                    </p>
                                     <div className="text-[11px] mt-2 font-medium opacity-90">{new Date().toLocaleDateString(t.dateLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
                                 </div>
                                 <select value={lang} onChange={(e) => { setLang(e.target.value); localStorage.setItem('habit-lang', e.target.value); }} className="bg-white/10 text-white text-[10px] font-bold py-1 px-2 rounded-lg outline-none cursor-pointer">
-                                    <option value="zh" className="text-slate-800">繁體中文</option>
-                                    <option value="vi" className="text-slate-800">Tiếng Việt</option>
-                                    <option value="en" className="text-slate-800">English</option>
+                                    <option value="zh">繁體中文</option><option value="vi">Tiếng Việt</option><option value="en">English</option>
                                 </select>
                             </div>
                             
                             <button onClick={() => setShowUserPanel(!showUserPanel)} className="mt-2 text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10 transition-all hover:bg-white/20 active:scale-95">👤 {activeName}</button>
                             
                             {showUserPanel && (
-                                <div className="mt-3 bg-indigo-800/90 p-4 rounded-xl animate-in fade-in zoom-in duration-200 shadow-xl border border-indigo-700">
+                                <div className="mt-3 bg-indigo-800/90 p-4 rounded-xl shadow-xl border border-indigo-700 animate-in fade-in zoom-in duration-200">
                                     <p className="text-[10px] font-bold text-indigo-200 mb-1 uppercase tracking-wider">{t.recentUsers}</p>
                                     <p className="text-[8px] text-indigo-300 mb-3 italic">{t.longPressTip}</p>
                                     <div className="flex flex-wrap gap-2 mb-4 user-list-scroll pr-1">
@@ -405,21 +377,19 @@
 
                         <div className="p-4 flex-1 overflow-y-auto no-scrollbar">
                             <div className="flex gap-2 mb-4">
-                                <input id="habitInput" type="text" placeholder={t.addPlaceholder} className="flex-1 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value.trim()){ addHabit(e.target.value); e.target.value = ''; }}} />
-                                <button onClick={() => { const input = document.getElementById('habitInput'); if(input.value.trim()){ addHabit(input.value); input.value = ''; }}} className="bg-indigo-600 text-white p-2 rounded-xl active:scale-95 transition-transform">＋</button>
+                                <input id="habitInput" type="text" placeholder={translations[lang].addPlaceholder} className="flex-1 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value.trim()){ addHabit(e.target.value); e.target.value = ''; }}} />
+                                <button onClick={() => { const input = document.getElementById('habitInput'); if(input.value.trim()){ addHabit(input.value); input.value = ''; }}} className="bg-indigo-600 text-white p-2 rounded-xl active:scale-95 transition-transform font-bold">＋</button>
                             </div>
-
-                            <button onClick={() => setShowAI(!showAI)} className={`w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100 transition-all hover:bg-purple-100`}>✨ {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
+                            
+                            <button onClick={() => setShowAI(!showAI)} className={`w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100 transition-all hover:bg-purple-100 font-serif font-bold`}>✨ {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
                             
                             {showAI && (
                                 <div className="mb-4 bg-purple-50 p-3 rounded-xl border border-purple-100 animate-in slide-in-from-top-2">
                                     <div className="flex gap-2 mb-2">
                                         <input type="text" value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} placeholder="想更有活力..." className="flex-1 text-xs p-2 rounded-lg border border-purple-200 outline-none" />
-                                        <button onClick={async () => { if(!aiGoal.trim()) return; try { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: `Goal:${aiGoal}. ${translations[lang].aiSystemPrompt}` }] }], generationConfig: { responseMimeType: "application/json" } }) }); const d = await r.json(); setAiSuggestions(JSON.parse(d.candidates[0].content.parts[0].text)); } catch(e) { alert("AI Error"); } }} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold active:scale-95 uppercase tracking-wide">生成</button>
+                                        <button onClick={async () => { if(!aiGoal.trim()) return; try { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: `Goal:${aiGoal}. 你是一位行為心理學家。根據使用者的目標推薦3個繁體中文的微習慣，包含 name (10字內) 和 reason (15字內)。格式：JSON 陣列。` }] }], generationConfig: { responseMimeType: "application/json" } }) }); const d = await r.json(); setAiSuggestions(JSON.parse(d.candidates[0].content.parts[0].text)); } catch(e) { alert("AI Error"); } }} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold active:scale-95 uppercase tracking-wide">生成</button>
                                     </div>
-                                    <div className="space-y-2">
-                                        {aiSuggestions.map((s, i) => <div key={i} className="bg-white p-2 rounded-lg flex justify-between items-center text-[10px] shadow-sm border border-purple-100 transition-all hover:border-purple-300"><span><b>{s.name}</b>: {s.reason}</span><button onClick={() => { addHabit(s.name); setAiSuggestions(prev => prev.filter(x => x.name !== s.name)); }} className="text-purple-600 font-bold px-2">＋</button></div>)}
-                                    </div>
+                                    <div className="space-y-2">{aiSuggestions.map((s, i) => <div key={i} className="bg-white p-2 rounded-lg flex justify-between items-center text-[10px] shadow-sm border border-purple-100 transition-all hover:border-purple-300"><span><b>{s.name}</b>: {s.reason}</span><button onClick={() => { addHabit(s.name); setAiSuggestions(prev => prev.filter(x => x.name !== s.name)); }} className="text-purple-600 font-bold px-2">＋</button></div>)}</div>
                                 </div>
                             )}
 
@@ -439,7 +409,7 @@
                                                     </div>
                                                     <div className="flex gap-1">
                                                         <button onClick={() => setExpandedId(expandedId === h.id ? null : h.id)} className={`p-1.5 rounded-lg text-xs ${expandedId === h.id ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300 hover:text-indigo-400'}`}>📅</button>
-                                                        <button onClick={() => setModal({ isOpen: true, type: 'habit', data: h.id })} className="text-slate-100 hover:text-red-400 p-1.5 transition-colors text-xs">🗑️</button>
+                                                        <button onClick={() => setModal({ isOpen: true, type: 'habit', data: h.id })} className="text-slate-100 hover:text-red-400 p-1.5 transition-colors text-xs font-bold">✕</button>
                                                     </div>
                                                 </div>
                                                 {expandedId === h.id && <MiniCalendar completedDates={h.completedDates} colorClass={isDone ? 'bg-green-500' : 'bg-indigo-500'} lang={lang} />}
@@ -453,7 +423,7 @@
 
                         <div className="p-4 bg-slate-50 border-t flex flex-col items-center gap-1">
                             <p className="text-[10px] text-slate-500 italic text-center leading-tight px-4 font-medium opacity-70">
-                                "{quote}"
+                                "{t.quotes[new Date().getDate() % t.quotes.length]}"
                             </p>
                         </div>
                     </div>
