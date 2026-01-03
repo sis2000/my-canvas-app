@@ -11,18 +11,16 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Firebase SDK 模組 (解決之前 Import 報錯的問題) -->
+    <!-- 2. Firebase SDK 模組 (新增 getDocs 以便進行整站刪除) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
-        // 將 SDK 掛載到全域以便 Babel 腳本使用
         window.FirebaseSDK = { 
             initializeApp, getAuth, signInAnonymously, onAuthStateChanged, 
-            getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query 
+            getFirestore, doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, query, getDocs
         };
-        // 觸發載入完成事件
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
 
@@ -30,9 +28,18 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f8fafc; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .user-list-scroll { max-height: 120px; overflow-y: auto; }
+        .user-list-scroll { max-height: 200px; overflow-y: auto; }
         .user-list-scroll::-webkit-scrollbar { width: 4px; }
         .user-list-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        
+        .btn-user-press {
+            transition: transform 1.5s linear, background-color 1.5s linear;
+        }
+        .long-press-active {
+            transform: scale(0.9) !important;
+            background-color: #ef4444 !important;
+            color: white !important;
+        }
     </style>
 </head>
 <body>
@@ -41,9 +48,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // ========================================================
-        // 【設定區】您的專屬金鑰與連線資訊
-        // ========================================================
         const myCustomFirebaseConfig = {
             apiKey: "AIzaSyAZZGBhfoPg8jfO78D0Z6irPRLgNBW_yPE",
             authDomain: "github-5d518.firebaseapp.com",
@@ -52,57 +56,57 @@
             messagingSenderId: "562364204504",
             appId: "1:562364204504:web:9911be99590c2b1fd41ead"
         };
-
         const geminiApiKey = "AIzaSyCm3_30XFuMUBlfvTCnWKPaWrUGoxpW1gc";
         const appId = 'habit-tracker-sync';
 
-        // --- 語言包 ---
         const translations = {
             zh: {
                 title: "雲端習慣",
                 statusLocal: "本機模式",
                 statusCloud: "雲端同步中",
                 statusSyncing: "連線中...",
-                switchUser: "切換使用者：",
+                switchUser: "切換使用者",
                 recentUsers: "最近使用的使用者",
+                longPressTip: "(按住按鈕 1.5 秒可「永久刪除」使用者)",
                 inputNewName: "輸入新名稱...",
-                confirm: "確認",
+                confirm: "確認刪除",
+                cancel: "取消",
                 switch: "切換",
                 todayProgress: "今日進度",
                 addPlaceholder: "新增今天的挑戰...",
                 aiButtonShow: "獲取 AI 建議",
                 aiButtonHide: "隱藏 AI 建議",
-                aiGoalPlaceholder: "如：我想更有活力...",
-                aiGenerate: "生成",
                 streak: "天連續",
                 noHabits: "還沒有習慣，新增一個吧！",
-                deleteConfirm: "確定刪除？",
-                aiSystemPrompt: "你是一位行為心理學家。根據目標推薦3個繁體中文微習慣。格式：JSON 陣列。",
+                deleteHabitConfirm: "確定要刪除這個習慣嗎？",
+                deleteUserTitle: "永久刪除使用者",
+                deleteUserBody: "確定要刪除使用者 「{name}」 嗎？這將會連同雲端上的所有習慣資料一併抹除，且無法復原！",
                 months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
                 days: ['日','一','二','三','四','五','六'],
                 dateLocale: "zh-TW",
                 quotes: ["成功源於每天的累積。","卓越不是行為，而是習慣。","每天進步1%，一年後強大37倍。","你是自己習慣的產物。"]
             },
             vi: {
-                title: "Thói Quen",
+                title: "Thói Quen Cloud",
                 statusLocal: "Chế độ nội bộ",
                 statusCloud: "Đang đồng bộ",
                 statusSyncing: "Đang kết nối...",
-                switchUser: "Người dùng: ",
-                recentUsers: "Gần đây",
+                switchUser: "Người dùng",
+                recentUsers: "Người dùng gần đây",
+                longPressTip: "(Nhấn giữ 1.5s để XÓA VĨNH VIỄN)",
                 inputNewName: "Nhập tên mới...",
-                confirm: "Xác nhận",
+                confirm: "Xác nhận xóa",
+                cancel: "Hủy",
                 switch: "Đổi",
                 todayProgress: "Tiến độ hôm nay",
                 addPlaceholder: "Thêm thử thách...",
                 aiButtonShow: "Gợi ý AI",
                 aiButtonHide: "Ẩn AI",
-                aiGoalPlaceholder: "VD: Tôi muốn khỏe hơn...",
-                aiGenerate: "Tạo",
                 streak: "ngày liên tiếp",
                 noHabits: "Chưa có thói quen!",
-                deleteConfirm: "Xóa thói quen này?",
-                aiSystemPrompt: "Gợi ý 3 thói quen nhỏ bằng tiếng Việt. JSON array.",
+                deleteHabitConfirm: "Xóa thói quen này?",
+                deleteUserTitle: "Xóa vĩnh viễn người dùng",
+                deleteUserBody: "Bạn có chắc muốn xóa 「{name}」? Tất cả dữ liệu trên Cloud cũng sẽ bị xóa và không thể khôi phục!",
                 months: ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"],
                 days: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
                 dateLocale: "vi-VN",
@@ -113,40 +117,45 @@
                 statusLocal: "Local Mode",
                 statusCloud: "Cloud Synced",
                 statusSyncing: "Connecting...",
-                switchUser: "User: ",
+                switchUser: "Switch User",
                 recentUsers: "Recent Users",
+                longPressTip: "(Hold 1.5s to PERMANENTLY delete)",
                 inputNewName: "Enter name...",
-                confirm: "Confirm",
+                confirm: "Delete All",
+                cancel: "Cancel",
                 switch: "Switch",
                 todayProgress: "Today's Progress",
                 addPlaceholder: "Add a habit...",
                 aiButtonShow: "AI Suggestions",
                 aiButtonHide: "Hide AI",
-                aiGoalPlaceholder: "e.g., be active...",
-                aiGenerate: "Generate",
                 streak: "day streak",
                 noHabits: "No habits yet!",
-                deleteConfirm: "Are you sure?",
-                aiSystemPrompt: "Suggest 3 micro-habits in English. JSON array.",
+                deleteHabitConfirm: "Are you sure?",
+                deleteUserTitle: "Delete User Permanently",
+                deleteUserBody: "Are you sure you want to delete user 「{name}」? This will erase ALL their data from the cloud permanently!",
                 months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
                 days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-                langLabel: "Language",
                 dateLocale: "en-US",
                 quotes: ["Success is daily repetition.","Excellence is a habit.","1% better every day.","You are your habits."]
             }
         };
 
-        // --- 圖示組件 ---
-        const Icon = ({ path, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
-        );
-        const Plus = (p) => <Icon {...p} path={<><path d="M5 12h14"/><path d="M12 5v14"/></>} />;
-        const Check = (p) => <Icon {...p} path={<polyline points="20 6 9 17 4 12"/>} />;
-        const Trash = (p) => <Icon {...p} path={<><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></>} />;
-        const Sparkles = (p) => <Icon {...p} path={<><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></>} />;
-        const CalendarIcon = (p) => <Icon {...p} path={<><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>} />;
+        const CustomModal = ({ isOpen, title, body, onConfirm, onCancel, confirmText, cancelText }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-xs p-6 shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-100">
+                        <h3 className="text-lg font-bold text-slate-800 mb-2">{title}</h3>
+                        <p className="text-sm text-slate-500 mb-6 leading-relaxed">{body}</p>
+                        <div className="flex gap-3">
+                            <button onClick={onCancel} className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors">{cancelText}</button>
+                            <button onClick={onConfirm} className="flex-1 py-2 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 shadow-lg shadow-red-200 transition-colors">{confirmText}</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
-        // --- 子組件：日曆 ---
         const MiniCalendar = ({ completedDates, colorClass, lang }) => {
             const t = translations[lang];
             const [viewDate, setViewDate] = useState(new Date());
@@ -171,8 +180,7 @@
                         <button onClick={() => setViewDate(new Date(y, m + 1, 1))}>&gt;</button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 text-center">
-                        {t.days.map(d => <div key={d} className="text-[10px] text-slate-400 font-bold">{d}</div>)}
-                        {renderDays()}
+                        {t.days.map(d => <div key={d} className="text-[10px] text-slate-400 font-bold">{d}</div>)}{renderDays()}
                     </div>
                 </div>
             );
@@ -194,6 +202,11 @@
             const [aiSuggestions, setAiSuggestions] = useState([]);
             const [expandedId, setExpandedId] = useState(null);
 
+            const [modal, setModal] = useState({ isOpen: false, type: '', data: null });
+            const pressTimer = useRef(null);
+            const [pressingUser, setPressingUser] = useState(null);
+            const hasTriggeredLongPress = useRef(false);
+
             const dbRef = useRef(null);
             const today = new Date().toISOString().split('T')[0];
 
@@ -210,7 +223,7 @@
                         const auth = getAuth(app);
                         dbRef.current = getFirestore(app);
                         await signInAnonymously(auth);
-                        onAuthStateChanged(auth, (user) => { if(user) { setAuthenticated(true); setConnStatus('cloud'); } });
+                        onAuthStateChanged(auth, (u) => { if(u) { setAuthenticated(true); setConnStatus('cloud'); } });
                     } catch(e) { setConnStatus('local'); setLoading(false); }
                 };
                 if (window.FirebaseSDK) init();
@@ -218,11 +231,9 @@
             }, [activeName]);
 
             useEffect(() => {
-                if (connStatus !== 'cloud' || !authenticated || !dbRef.current) return;
+                if (connStatus !== 'cloud' || !authenticated || !activeName || !dbRef.current) return;
                 setLoading(true);
-                const { collection, onSnapshot } = window.FirebaseSDK;
-                const habitsCol = collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName);
-                const unsub = onSnapshot(habitsCol, (snap) => {
+                const unsub = window.FirebaseSDK.onSnapshot(window.FirebaseSDK.collection(dbRef.current, 'artifacts', appId, 'public', 'data', activeName), (snap) => {
                     setHabits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
                 }, () => { setConnStatus('local'); setLoading(false); });
@@ -233,6 +244,65 @@
                 if (connStatus === 'local') localStorage.setItem(`local-${activeName}`, JSON.stringify(habits));
             }, [habits, activeName, connStatus]);
 
+            // --- 長按處理邏輯 ---
+            const startPress = (name) => {
+                setPressingUser(name);
+                hasTriggeredLongPress.current = false;
+                pressTimer.current = setTimeout(() => {
+                    hasTriggeredLongPress.current = true;
+                    setModal({ isOpen: true, type: 'user', data: name });
+                    setPressingUser(null);
+                }, 1500);
+            };
+
+            const endPress = (name) => {
+                if (pressTimer.current) {
+                    clearTimeout(pressTimer.current);
+                    pressTimer.current = null;
+                }
+                if (!hasTriggeredLongPress.current && pressingUser === name) {
+                    setActiveName(name);
+                    localStorage.setItem('habit-user-name', name);
+                    setShowUserPanel(false);
+                }
+                setPressingUser(null);
+            };
+
+            // 【核心變更：刪除使用者同時刪除雲端資料】
+            const confirmDeleteUser = async () => {
+                const nameToDelete = modal.data;
+                
+                // 1. 如果是雲端模式，刪除該使用者在雲端的所有文件
+                if (connStatus === 'cloud' && authenticated && dbRef.current) {
+                    const { collection, getDocs, deleteDoc, doc } = window.FirebaseSDK;
+                    const userColRef = collection(dbRef.current, 'artifacts', appId, 'public', 'data', nameToDelete);
+                    try {
+                        const querySnapshot = await getDocs(userColRef);
+                        const deletePromises = querySnapshot.docs.map(d => 
+                            deleteDoc(doc(dbRef.current, 'artifacts', appId, 'public', 'data', nameToDelete, d.id))
+                        );
+                        await Promise.all(deletePromises);
+                    } catch (error) {
+                        console.error("Cloud deletion failed:", error);
+                    }
+                }
+
+                // 2. 本地邏輯執行
+                const newList = userList.filter(n => n !== nameToDelete);
+                const nextActive = activeName === nameToDelete ? (newList[0] || 'Guest') : activeName;
+                
+                setUserList(newList);
+                localStorage.setItem('habit-user-list', JSON.stringify(newList));
+                localStorage.removeItem(`local-${nameToDelete}`); // 同時清除本地快取
+                
+                if (activeName === nameToDelete) {
+                    setActiveName(nextActive);
+                    localStorage.setItem('habit-user-name', nextActive);
+                }
+                setModal({ isOpen: false, type: '', data: null });
+            };
+
+            // --- 習慣操作 ---
             const addHabit = async (name) => {
                 if (!name.trim()) return;
                 if (connStatus === 'cloud' && authenticated) {
@@ -242,59 +312,89 @@
                 }
             };
 
-            const toggleHabit = async (h) => {
+            const toggleHabit = (h) => {
                 const isDone = h.completedDates?.includes(today);
                 const newDates = isDone ? h.completedDates.filter(d => d !== today) : [...(h.completedDates || []), today];
                 if (connStatus === 'cloud' && authenticated) {
-                    await window.FirebaseSDK.updateDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, h.id), { completedDates: newDates });
+                    window.FirebaseSDK.updateDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, h.id), { completedDates: newDates });
                 } else {
                     setHabits(prev => prev.map(item => item.id === h.id ? { ...item, completedDates: newDates } : item));
                 }
             };
 
-            const deleteHabit = async (id) => {
-                if (!window.confirm(t.deleteConfirm)) return;
+            const confirmDeleteHabit = (id) => {
                 if (connStatus === 'cloud' && authenticated) {
-                    await window.FirebaseSDK.deleteDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, id));
+                    window.FirebaseSDK.deleteDoc(window.FirebaseSDK.doc(dbRef.current, 'artifacts', appId, 'public', 'data', activeName, id));
                 } else {
                     setHabits(prev => prev.filter(item => item.id !== id));
                 }
+                setModal({ isOpen: false, type: '', data: null });
             };
 
             const completedToday = habits.filter(h => h.completedDates?.includes(today)).length;
             const progress = habits.length > 0 ? (completedToday / habits.length) * 100 : 0;
-            const dateStr = new Date().toLocaleDateString(t.dateLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
             const quote = t.quotes[new Date().getDate() % t.quotes.length];
 
             return (
                 <div className="min-h-screen bg-slate-50 py-4 px-2 flex flex-col items-center">
                     <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden flex flex-col h-[92vh] border">
-                        {/* Header */}
+                        
+                        <CustomModal 
+                            isOpen={modal.isOpen}
+                            title={modal.type === 'user' ? t.deleteUserTitle : '刪除確認'}
+                            body={modal.type === 'user' ? t.deleteUserBody.replace('{name}', modal.data) : t.deleteHabitConfirm}
+                            onConfirm={modal.type === 'user' ? confirmDeleteUser : () => confirmDeleteHabit(modal.data)}
+                            onCancel={() => setModal({ isOpen: false, type: '', data: null })}
+                            confirmText={t.confirm}
+                            cancelText={t.cancel}
+                        />
+
                         <div className="bg-indigo-600 p-5 text-white">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <h1 className="text-xl font-bold flex items-center gap-2">🏆 {t.title}</h1>
                                     <div className="flex items-center gap-1.5 text-[10px] opacity-80 mt-1">
-                                        <div className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400' : connStatus === 'syncing' ? 'bg-yellow-400' : 'bg-orange-400'}`}></div>
-                                        {connStatus === 'cloud' ? t.statusCloud : connStatus === 'syncing' ? t.statusSyncing : t.statusLocal}
+                                        <div className={`w-2 h-2 rounded-full ${connStatus === 'cloud' ? 'bg-green-400' : 'bg-orange-400'}`}></div>
+                                        {connStatus === 'cloud' ? t.statusCloud : t.statusLocal}
                                     </div>
-                                    <div className="text-[11px] mt-2 font-medium opacity-90">{dateStr}</div>
+                                    <div className="text-[11px] mt-2 font-medium opacity-90">{new Date().toLocaleDateString(t.dateLocale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
                                 </div>
-                                <select value={lang} onChange={(e) => { setLang(e.target.value); localStorage.setItem('habit-lang', e.target.value); }} className="bg-white/10 text-white text-[10px] font-bold py-1 px-2 rounded-lg outline-none">
+                                <select value={lang} onChange={(e) => { setLang(e.target.value); localStorage.setItem('habit-lang', e.target.value); }} className="bg-white/10 text-white text-[10px] font-bold py-1 px-2 rounded-lg outline-none cursor-pointer">
                                     <option value="zh" className="text-slate-800">繁體中文</option>
                                     <option value="vi" className="text-slate-800">Tiếng Việt</option>
                                     <option value="en" className="text-slate-800">English</option>
                                 </select>
                             </div>
-                            <button onClick={() => setShowUserPanel(!showUserPanel)} className="mt-2 text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10">👤 {activeName}</button>
+                            
+                            <button onClick={() => setShowUserPanel(!showUserPanel)} className="mt-2 text-[10px] bg-white/10 px-3 py-1 rounded-full border border-white/10 transition-all hover:bg-white/20 active:scale-95">👤 {activeName}</button>
+                            
                             {showUserPanel && (
-                                <div className="mt-3 bg-indigo-800/90 p-3 rounded-xl animate-in fade-in zoom-in duration-200">
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {userList.map(n => <button key={n} onClick={() => { setActiveName(n); localStorage.setItem('habit-user-name', n); setShowUserPanel(false); }} className={`px-2 py-1 rounded-lg text-xs ${activeName === n ? 'bg-yellow-400 text-indigo-900 font-bold' : 'bg-indigo-700 text-white'}`}>{n}</button>)}
+                                <div className="mt-3 bg-indigo-800/90 p-4 rounded-xl animate-in fade-in zoom-in duration-200 shadow-xl border border-indigo-700">
+                                    <p className="text-[10px] font-bold text-indigo-200 mb-1 uppercase tracking-wider">{t.recentUsers}</p>
+                                    <p className="text-[8px] text-indigo-300 mb-3 italic">{t.longPressTip}</p>
+                                    <div className="flex flex-wrap gap-2 mb-4 user-list-scroll pr-1">
+                                        {userList.map(n => (
+                                            <button 
+                                                key={n}
+                                                onMouseDown={() => startPress(n)}
+                                                onMouseUp={() => endPress(n)}
+                                                onMouseLeave={() => setPressingUser(null)}
+                                                onTouchStart={() => startPress(n)}
+                                                onTouchEnd={() => endPress(n)}
+                                                onContextMenu={(e) => e.preventDefault()}
+                                                className={`btn-user-press px-3 py-1.5 rounded-lg text-xs select-none ${
+                                                    activeName === n 
+                                                        ? 'bg-yellow-400 text-indigo-900 font-bold shadow-lg shadow-yellow-400/20' 
+                                                        : 'bg-indigo-700 text-white'
+                                                } ${pressingUser === n ? 'long-press-active' : ''}`}
+                                            >
+                                                {n}
+                                            </button>
+                                        ))}
                                     </div>
                                     <div className="flex gap-2">
-                                        <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} placeholder={t.inputNewName} className="flex-1 bg-white/10 border-white/20 border rounded-lg px-2 py-1 text-xs text-white outline-none" />
-                                        <button onClick={() => { if(tempName.trim()){ const nl = [...new Set([...userList, tempName.trim()])]; setUserList(nl); localStorage.setItem('habit-user-list', JSON.stringify(nl)); setActiveName(tempName.trim()); localStorage.setItem('habit-user-name', tempName.trim()); setShowUserPanel(false); setTempName(''); }}} className="bg-white text-indigo-600 px-3 py-1 rounded-lg text-xs font-bold">{t.confirm}</button>
+                                        <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} placeholder={t.inputNewName} className="flex-1 bg-white/10 border-white/20 border rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-white/50" />
+                                        <button onClick={() => { if(tempName.trim()){ const nl = [...new Set([...userList, tempName.trim()])]; setUserList(nl); localStorage.setItem('habit-user-list', JSON.stringify(nl)); setActiveName(tempName.trim()); localStorage.setItem('habit-user-name', tempName.trim()); setShowUserPanel(false); setTempName(''); }}} className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95">{t.confirm}</button>
                                     </div>
                                 </div>
                             )}
@@ -303,22 +403,22 @@
                             </div>
                         </div>
 
-                        {/* Body */}
                         <div className="p-4 flex-1 overflow-y-auto no-scrollbar">
                             <div className="flex gap-2 mb-4">
-                                <input id="habitInput" type="text" placeholder={t.addPlaceholder} className="flex-1 border rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value.trim()){ addHabit(e.target.value); e.target.value = ''; }}} />
-                                <button onClick={() => { const input = document.getElementById('habitInput'); if(input.value.trim()){ addHabit(input.value); input.value = ''; }}} className="bg-indigo-600 text-white p-2 rounded-xl"><Plus className="w-5 h-5" /></button>
+                                <input id="habitInput" type="text" placeholder={t.addPlaceholder} className="flex-1 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.value.trim()){ addHabit(e.target.value); e.target.value = ''; }}} />
+                                <button onClick={() => { const input = document.getElementById('habitInput'); if(input.value.trim()){ addHabit(input.value); input.value = ''; }}} className="bg-indigo-600 text-white p-2 rounded-xl active:scale-95 transition-transform">＋</button>
                             </div>
 
-                            <button onClick={() => setShowAI(!showAI)} className="w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100"><Sparkles className="w-4 h-4"/> {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
+                            <button onClick={() => setShowAI(!showAI)} className={`w-full py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold mb-4 flex items-center justify-center gap-1 border border-purple-100 transition-all hover:bg-purple-100`}>✨ {showAI ? t.aiButtonHide : t.aiButtonShow}</button>
+                            
                             {showAI && (
                                 <div className="mb-4 bg-purple-50 p-3 rounded-xl border border-purple-100 animate-in slide-in-from-top-2">
                                     <div className="flex gap-2 mb-2">
-                                        <input type="text" value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} placeholder={t.aiGoalPlaceholder} className="flex-1 text-xs p-2 rounded-lg border outline-none" />
-                                        <button onClick={async () => { if(!aiGoal.trim()) return; try { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: `Goal:${aiGoal}. ${t.aiSystemPrompt}` }] }], generationConfig: { responseMimeType: "application/json" } }) }); const d = await r.json(); setAiSuggestions(JSON.parse(d.candidates[0].content.parts[0].text)); } catch(e) { alert("AI Error"); } }} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold">{t.aiGenerate}</button>
+                                        <input type="text" value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} placeholder="想更有活力..." className="flex-1 text-xs p-2 rounded-lg border border-purple-200 outline-none" />
+                                        <button onClick={async () => { if(!aiGoal.trim()) return; try { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: `Goal:${aiGoal}. ${translations[lang].aiSystemPrompt}` }] }], generationConfig: { responseMimeType: "application/json" } }) }); const d = await r.json(); setAiSuggestions(JSON.parse(d.candidates[0].content.parts[0].text)); } catch(e) { alert("AI Error"); } }} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold active:scale-95 uppercase tracking-wide">生成</button>
                                     </div>
                                     <div className="space-y-2">
-                                        {aiSuggestions.map((s, i) => <div key={i} className="bg-white p-2 rounded-lg flex justify-between items-center text-[10px] shadow-sm"><span><b>{s.name}</b>: {s.reason}</span><button onClick={() => { addHabit(s.name); setAiSuggestions(prev => prev.filter(x => x.name !== s.name)); }} className="text-purple-600 font-bold">+</button></div>)}
+                                        {aiSuggestions.map((s, i) => <div key={i} className="bg-white p-2 rounded-lg flex justify-between items-center text-[10px] shadow-sm border border-purple-100 transition-all hover:border-purple-300"><span><b>{s.name}</b>: {s.reason}</span><button onClick={() => { addHabit(s.name); setAiSuggestions(prev => prev.filter(x => x.name !== s.name)); }} className="text-purple-600 font-bold px-2">＋</button></div>)}
                                     </div>
                                 </div>
                             )}
@@ -334,12 +434,12 @@
                                             <div key={h.id} className={`p-3 rounded-2xl border transition-all ${isDone ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100 shadow-sm'}`}>
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleHabit(h)}>
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDone ? 'bg-green-500 text-white' : 'bg-slate-50 text-slate-300'}`}><Check className="w-4 h-4" /></div>
-                                                        <div><h3 className={`text-sm font-bold ${isDone ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{h.name}</h3><span className="text-[9px] text-orange-500 font-bold">🔥 {streak} {t.streak}</span></div>
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${isDone ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-slate-200 text-transparent'}`}>✓</div>
+                                                        <div><h3 className={`text-sm font-bold ${isDone ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{h.name}</h3><span className="text-[9px] text-orange-500 font-bold">🔥 {streak} {translations[lang].streak}</span></div>
                                                     </div>
                                                     <div className="flex gap-1">
-                                                        <button onClick={() => setExpandedId(expandedId === h.id ? null : h.id)} className={`p-1.5 rounded-lg ${expandedId === h.id ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300'}`}><CalendarIcon className="w-4 h-4" /></button>
-                                                        <button onClick={() => deleteHabit(h.id)} className="text-slate-100 hover:text-red-400 transition-colors"><Trash className="w-4 h-4" /></button>
+                                                        <button onClick={() => setExpandedId(expandedId === h.id ? null : h.id)} className={`p-1.5 rounded-lg text-xs ${expandedId === h.id ? 'bg-indigo-100 text-indigo-600' : 'text-slate-300 hover:text-indigo-400'}`}>📅</button>
+                                                        <button onClick={() => setModal({ isOpen: true, type: 'habit', data: h.id })} className="text-slate-100 hover:text-red-400 p-1.5 transition-colors text-xs">🗑️</button>
                                                     </div>
                                                 </div>
                                                 {expandedId === h.id && <MiniCalendar completedDates={h.completedDates} colorClass={isDone ? 'bg-green-500' : 'bg-indigo-500'} lang={lang} />}
@@ -351,11 +451,9 @@
                             )}
                         </div>
 
-                        {/* Footer Quote */}
                         <div className="p-4 bg-slate-50 border-t flex flex-col items-center gap-1">
-                            <span className="text-indigo-200 text-lg">“</span>
-                            <p className="text-[10px] text-slate-500 italic text-center leading-tight px-4 whitespace-normal font-medium">
-                                {quote}
+                            <p className="text-[10px] text-slate-500 italic text-center leading-tight px-4 font-medium opacity-70">
+                                "{quote}"
                             </p>
                         </div>
                     </div>
